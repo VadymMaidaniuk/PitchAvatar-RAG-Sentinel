@@ -1,10 +1,56 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Generator
+
 import pytest
 
 from pitchavatar_rag_sentinel.clients.opensearch_helper import OpenSearchHelper
 from pitchavatar_rag_sentinel.clients.rag_client import RagServiceClient
+from pitchavatar_rag_sentinel.config import SentinelSettings
 from pitchavatar_rag_sentinel.utils.assertions import unique_document_ids
+from pitchavatar_rag_sentinel.utils.naming import unique_document_id
+
+
+@pytest.fixture(scope="session")
+def opensearch_helper(settings: SentinelSettings) -> OpenSearchHelper:
+    # White-box smoke checks use direct OpenSearch queries only and should not require index
+    # bootstrap privileges in QA.
+    return OpenSearchHelper(settings)
+
+
+@pytest.fixture()
+def tracked_documents(
+    rag_client: RagServiceClient,
+) -> Generator[list[str], None, None]:
+    document_ids: list[str] = []
+    yield document_ids
+
+    cleanup_errors: list[str] = []
+    for document_id in document_ids:
+        try:
+            response = rag_client.delete_document(document_id)
+            if not response.success:
+                cleanup_errors.append(
+                    f"Delete failed for {document_id!r}: {response.message}"
+                )
+        except Exception as exc:  # noqa: BLE001
+            cleanup_errors.append(f"{document_id!r}: {exc}")
+
+    if cleanup_errors:
+        raise AssertionError("Smoke OpenSearch cleanup failed:\n" + "\n".join(cleanup_errors))
+
+
+@pytest.fixture()
+def make_document_id(
+    settings: SentinelSettings,
+    tracked_documents: list[str],
+) -> Callable[[str], str]:
+    def factory(slug: str) -> str:
+        document_id = unique_document_id(settings.namespace, slug)
+        tracked_documents.append(document_id)
+        return document_id
+
+    return factory
 
 
 @pytest.mark.smoke

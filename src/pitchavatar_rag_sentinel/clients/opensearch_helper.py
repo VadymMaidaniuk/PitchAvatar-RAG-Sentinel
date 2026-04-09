@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Generator
 from urllib.parse import urlparse
 
 from opensearchpy import OpenSearch, helpers
+from opensearchpy.exceptions import AuthorizationException
 
 from pitchavatar_rag_sentinel.config import SentinelSettings
+
+
+logger = logging.getLogger(__name__)
 
 
 TEST_INDEX_MAPPING = {
@@ -81,7 +86,14 @@ class OpenSearchHelper:
 
     def ensure_test_index(self) -> None:
         self._settings.assert_safe_index()
-        if self._resources_ready():
+        try:
+            if self._resources_ready():
+                return
+        except AuthorizationException:
+            logger.warning(
+                "Skipping OpenSearch target bootstrap because the current credentials cannot "
+                "inspect index or alias existence. Direct query-based verification may still work."
+            )
             return
         if not self._settings.auto_create_index:
             raise RuntimeError(
@@ -92,7 +104,14 @@ class OpenSearchHelper:
         self._create_or_configure_targets()
 
     def refresh_index(self) -> None:
-        self._client.indices.refresh(index=self.primary_index_name)
+        try:
+            self._client.indices.refresh(index=self.primary_index_name)
+        except AuthorizationException:
+            logger.warning(
+                "Skipping OpenSearch refresh for %r because the current credentials do not have "
+                "refresh permissions. Visibility checks will rely on eventual consistency.",
+                self.primary_index_name,
+            )
         time.sleep(self._settings.refresh_wait_seconds)
 
     def count_chunks_by_document_id(self, document_id: str) -> int:
