@@ -160,9 +160,18 @@ class OpenSearchHelper:
     ) -> int:
         deadline = time.monotonic() + timeout_seconds
         last_count = 0
+        attempt = 0
         while time.monotonic() < deadline:
             self.refresh_index()
             last_count = self.count_chunks_by_document_id(document_id)
+            attempt += 1
+            if attempt == 1 or attempt % 5 == 0:
+                logger.info(
+                    "Waiting for document %r in OpenSearch: %s chunk(s) visible, need at least %s.",
+                    document_id,
+                    last_count,
+                    min_chunks,
+                )
             if last_count >= min_chunks:
                 return last_count
             time.sleep(poll_interval_seconds)
@@ -178,9 +187,18 @@ class OpenSearchHelper:
         poll_interval_seconds: float = 1.0,
     ) -> None:
         deadline = time.monotonic() + timeout_seconds
+        attempt = 0
         while time.monotonic() < deadline:
             self.refresh_index()
-            if self.count_chunks_by_document_id(document_id) == 0:
+            chunk_count = self.count_chunks_by_document_id(document_id)
+            attempt += 1
+            if attempt == 1 or attempt % 5 == 0:
+                logger.info(
+                    "Waiting for document %r cleanup in OpenSearch: %s chunk(s) still visible.",
+                    document_id,
+                    chunk_count,
+                )
+            if chunk_count == 0:
                 return
             time.sleep(poll_interval_seconds)
         raise TimeoutError(f"Document {document_id!r} was not deleted in time.")

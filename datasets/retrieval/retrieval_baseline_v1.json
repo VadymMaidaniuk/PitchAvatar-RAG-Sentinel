@@ -1,0 +1,131 @@
+{
+  "dataset_id": "retrieval_baseline_v1",
+  "description": "Stable baseline retrieval corpus for Sentinel MVP. Uses one exact-match runbook, one semantically similar support guide, and unrelated distractors to validate seed-search-evaluate-cleanup flow on dev gRPC plus QA OpenSearch.",
+  "documents": [
+    {
+      "key": "doc_runbook_exact",
+      "content": "Incident code RAG-4419 affects the Atlas ingestion worker. If document indexing stops for Atlas, restart the ingestion worker service. The owner team is Core Search. This recovery note is used during Atlas indexing outages.",
+      "metadata": {
+        "user_id": "user-alpha",
+        "type": "runbook"
+      },
+      "min_expected_chunks": 1
+    },
+    {
+      "key": "doc_support_semantic",
+      "content": "When Atlas file processing gets stuck and new documents are not indexed, the usual recovery action is to restart the ingestion service. Core Search maintains this indexing pipeline and handles Atlas recovery procedures.",
+      "metadata": {
+        "user_id": "user-alpha",
+        "type": "guide"
+      },
+      "min_expected_chunks": 1
+    },
+    {
+      "key": "doc_travel_policy",
+      "content": "Employees traveling to conferences must submit hotel receipts within five business days. Airfare changes require manager approval, and taxi reimbursements must include a trip purpose in the expense report.",
+      "metadata": {
+        "user_id": "user-beta",
+        "type": "policy"
+      },
+      "min_expected_chunks": 1
+    },
+    {
+      "key": "doc_kitchen_safety",
+      "content": "Kitchen safety rules require labeling food containers, storing cleaning liquids separately, and sanitizing preparation surfaces after each shift. Gloves must be replaced after handling raw ingredients.",
+      "metadata": {
+        "user_id": "user-gamma",
+        "type": "manual"
+      },
+      "min_expected_chunks": 1
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "q1_exact_incident_code",
+      "query": "RAG-4419",
+      "alpha": 1.0,
+      "top_k": 3,
+      "threshold": 0.0,
+      "document_scope": [
+        "doc_runbook_exact",
+        "doc_support_semantic",
+        "doc_travel_policy"
+      ],
+      "expectations": {
+        "expected_top1": "doc_runbook_exact",
+        "expected_in_topk": [
+          "doc_runbook_exact"
+        ],
+        "forbidden_docs": [
+          "doc_travel_policy"
+        ],
+        "min_results": 1
+      }
+    },
+    {
+      "query_id": "q2_vector_recovery_semantic",
+      "query": "How do I recover Atlas indexing when file processing stops?",
+      "alpha": 0.0,
+      "top_k": 3,
+      "threshold": 0.0,
+      "document_scope": [
+        "doc_runbook_exact",
+        "doc_support_semantic",
+        "doc_kitchen_safety"
+      ],
+      "expectations": {
+        "expected_in_topk": [
+          "doc_runbook_exact",
+          "doc_support_semantic"
+        ],
+        "forbidden_docs": [
+          "doc_kitchen_safety"
+        ],
+        "min_results": 2
+      }
+    },
+    {
+      "query_id": "q3_hybrid_filter_runbook_guide",
+      "query": "Atlas ingestion recovery",
+      "alpha": 0.5,
+      "top_k": 5,
+      "threshold": 0.0,
+      "document_scope": "all",
+      "filters": [
+        {
+          "field": "user_id",
+          "values": [
+            "user-alpha"
+          ]
+        }
+      ],
+      "expectations": {
+        "expected_in_topk": [
+          "doc_runbook_exact",
+          "doc_support_semantic"
+        ],
+        "forbidden_docs": [
+          "doc_travel_policy",
+          "doc_kitchen_safety"
+        ],
+        "min_results": 2
+      }
+    },
+    {
+      "query_id": "q4_negative_exact_absent_terms",
+      "query": "food containers sanitizing surfaces",
+      "alpha": 1.0,
+      "top_k": 3,
+      "threshold": 0.0,
+      "document_scope": [
+        "doc_runbook_exact",
+        "doc_support_semantic",
+        "doc_travel_policy"
+      ],
+      "expectations": {
+        "expect_empty": true,
+        "min_results": 0
+      }
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -17,6 +18,9 @@ from pitchavatar_rag_sentinel.evaluators.retrieval import (
 from pitchavatar_rag_sentinel.reporting.artifacts import ArtifactWriter
 from pitchavatar_rag_sentinel.utils.assertions import unique_document_ids
 from pitchavatar_rag_sentinel.utils.naming import unique_document_id
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -154,6 +158,11 @@ class RetrievalFlowExecutor:
                 self._settings.namespace,
                 f"{dataset.dataset_id}-{document.key}",
             )
+            logger.info(
+                "Upserting dataset document %r as %r.",
+                document.key,
+                runtime_document_id,
+            )
             response = self._rag_client.upsert_content(
                 document_id=runtime_document_id,
                 content=document.content,
@@ -164,6 +173,19 @@ class RetrievalFlowExecutor:
                     f"Failed to upsert document {document.key!r}: {response.message}"
                 )
 
+            # Register the runtime document immediately after a successful upsert so cleanup still
+            # covers it if visibility waits time out or the run is interrupted mid-seed.
+            seeded_documents[document.key] = SeededDocumentState(
+                key=document.key,
+                runtime_document_id=runtime_document_id,
+                indexed_chunk_count=0,
+                metadata=document.metadata,
+            )
+
+            logger.info(
+                "Waiting for document %r to become visible in OpenSearch.",
+                runtime_document_id,
+            )
             indexed_chunk_count = self._opensearch.wait_until_document_present(
                 runtime_document_id,
                 min_chunks=document.min_expected_chunks,
@@ -174,6 +196,11 @@ class RetrievalFlowExecutor:
                 runtime_document_id=runtime_document_id,
                 indexed_chunk_count=indexed_chunk_count,
                 metadata=document.metadata,
+            )
+            logger.info(
+                "Document %r is visible in OpenSearch with %s chunk(s).",
+                runtime_document_id,
+                indexed_chunk_count,
             )
 
         manifest = {
@@ -210,6 +237,7 @@ class RetrievalFlowExecutor:
         }
 
         start = time.perf_counter()
+        logger.info("Executing query %r with scope %s.", query_case.query_id, document_scope)
         response = self._rag_client.search(
             query=query_case.query,
             document_ids=document_scope,
@@ -277,6 +305,7 @@ class RetrievalFlowExecutor:
             error: str | None = None
 
             try:
+                logger.info("Cleaning up runtime document %r via gRPC delete.", document.runtime_document_id)
                 response = self._rag_client.delete_document(document.runtime_document_id)
                 grpc_delete_success = response.success
                 grpc_message = response.message
@@ -285,17 +314,26 @@ class RetrievalFlowExecutor:
                     timeout_seconds=self._settings.cleanup_wait_timeout_seconds,
                 )
                 cleanup_verified = True
+                logger.info("Cleanup verified for runtime document %r.", document.runtime_document_id)
             except (grpc.RpcError, RuntimeError, TimeoutError) as exc:
                 error = str(exc)
                 if self._settings.delete_fallback_to_opensearch:
                     try:
                         fallback_cleanup_used = True
+                        logger.info(
+                            "Falling back to direct OpenSearch cleanup for runtime document %r.",
+                            document.runtime_document_id,
+                        )
                         self._opensearch.cleanup_document(document.runtime_document_id)
                         self._opensearch.wait_until_document_absent(
                             document.runtime_document_id,
                             timeout_seconds=self._settings.cleanup_wait_timeout_seconds,
                         )
                         cleanup_verified = True
+                        logger.info(
+                            "Fallback cleanup verified for runtime document %r.",
+                            document.runtime_document_id,
+                        )
                     except Exception as fallback_exc:  # noqa: BLE001
                         error = f"{error}; fallback_cleanup_error={fallback_exc}"
 
