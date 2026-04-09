@@ -64,6 +64,7 @@ Before the first real run:
   - `RAG_SENTINEL_OPENSEARCH_WRITE_ALIAS`
   - `RAG_SENTINEL_OPENSEARCH_READ_ALIAS`
   - `RAG_SENTINEL_OPENSEARCH_PHYSICAL_INDEX` when known
+- if your QA role only has direct `_search` access in OpenSearch, keep `RAG_SENTINEL_DELETE_FALLBACK_TO_OPENSEARCH=false` and rely on gRPC delete plus OpenSearch search-based verification
 - if you run tiny corpora, confirm the RAG service itself is started with a BM25 threshold that will not filter out everything; QA verification confirmed `RAG_SERVICE_SEARCH_BM25_MIN_SCORE=0.1` works for white-box BM25 checks
 
 Recommended QA values:
@@ -168,10 +169,17 @@ Run one dataset manually and print summary:
 .venv\Scripts\python scripts\run_dataset.py datasets\retrieval\quantum_baseline.json --summary
 ```
 
-Run the legacy smoke suite:
+Run the gRPC-only smoke suite:
 
 ```powershell
-.venv\Scripts\python -m pytest -m smoke
+.venv\Scripts\python -m pytest tests\smoke\test_smoke.py -vv
+```
+
+Run the currently accessible QA checks only:
+
+```powershell
+.\scripts\test.ps1 -Profile grpc
+.\scripts\test.ps1 -Profile available
 ```
 
 ## Artifacts
@@ -204,6 +212,12 @@ Secondary legacy suites:
 - smoke
 - workflow
 - endpoint-focused search checks
+
+Recommended while QA access is limited to gRPC plus direct OpenSearch `_search`:
+
+- `grpc` profile: local contract tests plus gRPC-only smoke
+- `available` profile: `grpc` plus white-box OpenSearch search checks in `smoke`, `search`, and `workflow`
+- full dataset retrieval runs stay available, but they are no longer the default recommendation for partial-access QA roles
 
 ## Notes
 

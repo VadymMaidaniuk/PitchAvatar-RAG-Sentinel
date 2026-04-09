@@ -52,12 +52,28 @@ def retrieval_executor(
 
 
 @pytest.fixture()
-def tracked_documents(opensearch_helper: OpenSearchHelper) -> Generator[list[str], None, None]:
+def tracked_documents(
+    rag_client: RagServiceClient,
+    opensearch_helper: OpenSearchHelper,
+) -> Generator[list[str], None, None]:
     document_ids: list[str] = []
     yield document_ids
+
+    cleanup_errors: list[str] = []
     for document_id in document_ids:
-        opensearch_helper.cleanup_document(document_id)
-    opensearch_helper.refresh_index()
+        try:
+            response = rag_client.delete_document(document_id)
+            if not response.success:
+                cleanup_errors.append(
+                    f"Delete failed for {document_id!r}: {response.message}"
+                )
+                continue
+            opensearch_helper.wait_until_document_absent(document_id)
+        except Exception as exc:  # noqa: BLE001
+            cleanup_errors.append(f"{document_id!r}: {exc}")
+
+    if cleanup_errors:
+        raise AssertionError("Tracked document cleanup failed:\n" + "\n".join(cleanup_errors))
 
 
 @pytest.fixture()

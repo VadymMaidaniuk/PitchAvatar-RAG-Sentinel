@@ -15,4 +15,5 @@ if ($WithReport) {
 & .venv\Scripts\python scripts\generate_proto.py
 
 Write-Host "Bootstrap complete."
-Write-Host "Use: .venv\Scripts\python -m pytest -m smoke"
+Write-Host "Use: .\scripts\test.ps1 -Profile grpc"
+Write-Host "Or:  .\scripts\test.ps1 -Profile available"

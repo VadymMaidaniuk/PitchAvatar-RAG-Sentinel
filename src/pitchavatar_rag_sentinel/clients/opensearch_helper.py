@@ -54,6 +54,8 @@ TEST_INDEX_MAPPING = {
 class OpenSearchHelper:
     def __init__(self, settings: SentinelSettings) -> None:
         self._settings = settings
+        self._bootstrap_warning_logged = False
+        self._refresh_warning_logged = False
         parsed = urlparse(settings.opensearch_url)
         self._client = OpenSearch(
             hosts=[settings.opensearch_url],
@@ -90,10 +92,12 @@ class OpenSearchHelper:
             if self._resources_ready():
                 return
         except AuthorizationException:
-            logger.warning(
-                "Skipping OpenSearch target bootstrap because the current credentials cannot "
-                "inspect index or alias existence. Direct query-based verification may still work."
-            )
+            if not self._bootstrap_warning_logged:
+                logger.warning(
+                    "Skipping OpenSearch target bootstrap because the current credentials cannot "
+                    "inspect index or alias existence. Direct query-based verification may still work."
+                )
+                self._bootstrap_warning_logged = True
             return
         if not self._settings.auto_create_index:
             raise RuntimeError(
@@ -107,28 +111,24 @@ class OpenSearchHelper:
         try:
             self._client.indices.refresh(index=self.primary_index_name)
         except AuthorizationException:
-            logger.warning(
-                "Skipping OpenSearch refresh for %r because the current credentials do not have "
-                "refresh permissions. Visibility checks will rely on eventual consistency.",
-                self.primary_index_name,
-            )
+            if not self._refresh_warning_logged:
+                logger.warning(
+                    "Skipping OpenSearch refresh for %r because the current credentials do not have "
+                    "refresh permissions. Visibility checks will rely on eventual consistency.",
+                    self.primary_index_name,
+                )
+                self._refresh_warning_logged = True
         time.sleep(self._settings.refresh_wait_seconds)
 
     def count_chunks_by_document_id(self, document_id: str) -> int:
-        response = self._client.count(
-            index=self.read_index_name,
-            body={"query": {"term": {"metadata.document_id": document_id}}},
-        )
-        return int(response["count"])
+        response = self._search_document_chunks(document_id, size=0)
+        total = response["hits"]["total"]
+        if isinstance(total, dict):
+            return int(total["value"])
+        return int(total)
 
     def get_chunks_by_document_id(self, document_id: str) -> list[dict]:
-        response = self._client.search(
-            index=self.read_index_name,
-            body={
-                "size": 10000,
-                "query": {"term": {"metadata.document_id": document_id}},
-            },
-        )
+        response = self._search_document_chunks(document_id, size=10000)
         hits = [hit["_source"] for hit in response["hits"]["hits"]]
         hits.sort(key=lambda item: item.get("metadata", {}).get("chunk_index", -1))
         return hits
@@ -138,6 +138,16 @@ class OpenSearchHelper:
             index=self.write_index_name,
             body={"query": {"term": {"metadata.document_id": document_id}}},
             params={"refresh": "true", "conflicts": "proceed"},
+        )
+
+    def _search_document_chunks(self, document_id: str, *, size: int) -> dict:
+        return self._client.search(
+            index=self.read_index_name,
+            body={
+                "size": size,
+                "track_total_hits": True,
+                "query": {"term": {"metadata.document_id": document_id}},
+            },
         )
 
     def wait_until_document_present(
