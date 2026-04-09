@@ -1,0 +1,115 @@
+{
+  "dataset_id": "quantum_baseline",
+  "description": "Small retrieval regression corpus for seed-search-evaluate-cleanup flow on dev gRPC plus isolated OpenSearch.",
+  "documents": [
+    {
+      "key": "doc_a",
+      "content": "Quantum computing harnesses quantum mechanical phenomena like superposition and entanglement to process information in fundamentally new ways. Unlike classical computers that use binary bits representing either zero or one, quantum computers use qubits that can exist in multiple states simultaneously. This capability enables exponential speedup for certain computational problems.",
+      "metadata": {
+        "user_id": "user-alpha",
+        "type": "pdf"
+      },
+      "min_expected_chunks": 1
+    },
+    {
+      "key": "doc_b",
+      "content": "Organic gardening relies on natural methods to grow healthy plants without synthetic fertilizers or chemical pesticides. Composting kitchen scraps and crop rotation prevent soil depletion and improve plant health over time.",
+      "metadata": {
+        "user_id": "user-alpha",
+        "type": "docx"
+      },
+      "min_expected_chunks": 1
+    },
+    {
+      "key": "doc_c",
+      "content": "Quantum physics experiments have revealed the strange nature of subatomic reality. Bell test experiments have confirmed quantum entanglement, and the double-slit experiment demonstrates wave-particle duality.",
+      "metadata": {
+        "user_id": "user-beta",
+        "type": "pdf"
+      },
+      "min_expected_chunks": 1
+    },
+    {
+      "key": "doc_d",
+      "content": "Machine learning enables computers to learn patterns from datasets without being explicitly programmed for each task. Deep learning excels at processing text, images, and audio.",
+      "metadata": {
+        "user_id": "user-gamma",
+        "type": "txt"
+      },
+      "min_expected_chunks": 1
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "text_quantum_scope",
+      "query": "quantum computing qubits",
+      "alpha": 1.0,
+      "top_k": 5,
+      "threshold": 0.3,
+      "document_scope": [
+        "doc_a",
+        "doc_b"
+      ],
+      "expectations": {
+        "expected_top1": "doc_a",
+        "expected_in_topk": [
+          "doc_a"
+        ],
+        "forbidden_docs": [
+          "doc_b"
+        ],
+        "min_results": 1
+      }
+    },
+    {
+      "query_id": "hybrid_pdf_filter",
+      "query": "quantum",
+      "alpha": 0.5,
+      "top_k": 10,
+      "threshold": 0.3,
+      "document_scope": "all",
+      "filters": [
+        {
+          "field": "type",
+          "values": [
+            "pdf"
+          ]
+        }
+      ],
+      "expectations": {
+        "expected_in_topk": [
+          "doc_a",
+          "doc_c"
+        ],
+        "forbidden_docs": [
+          "doc_b",
+          "doc_d"
+        ],
+        "min_results": 2
+      }
+    },
+    {
+      "query_id": "vector_quantum_vs_unrelated",
+      "query": "quantum entanglement processors",
+      "alpha": 0.0,
+      "top_k": 5,
+      "threshold": 0.3,
+      "document_scope": [
+        "doc_a",
+        "doc_c",
+        "doc_d"
+      ],
+      "expectations": {
+        "expected_in_topk": [
+          "doc_a",
+          "doc_c"
+        ],
+        "forbidden_docs": [
+          "doc_d"
+        ],
+        "min_results": 1
+      }
+    }
+  ]
+}
+

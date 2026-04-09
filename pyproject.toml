@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pitchavatar-rag-sentinel"
+version = "0.1.0"
+description = "QA-owned black-box MVP framework for PitchAvatar RAG service"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "grpcio>=1.71,<2",
+  "opensearch-py>=2.8,<3",
+  "protobuf>=5.29,<7",
+  "pydantic-settings>=2.7,<3",
+  "pytest>=8.3,<9",
+  "redis>=5.2,<7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "grpcio-tools>=1.71,<2",
+  "pytest-cov>=6,<7",
+  "ruff>=0.11,<0.12",
+]
+report = [
+  "allure-pytest>=2.13,<3",
+]
+parallel = [
+  "pytest-xdist>=3.6,<4",
+]
+evals = [
+  "ragas>=0.2,<0.3",
+  "numpy>=2.2,<3",
+  "pandas>=2.2,<3",
+]
+ui = [
+  "playwright>=1.52,<2",
+  "pytest-playwright>=0.7,<1",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+  "smoke: minimal happy-path checks for environment readiness",
+  "workflow: document lifecycle and mutation behavior checks",
+  "search: retrieval, filtering, threshold, and ranking checks",
+  "retrieval: dataset-driven seed-search-evaluate-cleanup flows",
+  "dataset: dataset-backed scenarios and regression corpora",
+  "destructive: tests that mutate OpenSearch data and require cleanup",
+  "slow: long-running or large-volume scenarios",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint.per-file-ignores]
+"src/pitchavatar_rag_sentinel/generated/*.py" = ["F401"]

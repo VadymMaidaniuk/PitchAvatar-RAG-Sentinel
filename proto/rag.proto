@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+package rag;
+
+option go_package = "./.;rag";
+
+// Define the service
+service RagService {
+    // RPC for uploading a document
+    rpc Upsert(UploadDocumentRequest) returns (UploadDocumentResponse);
+
+    // RPC for deleting an index
+    rpc DeleteIndex(DeleteIndexRequest) returns (DeleteIndexResponse);
+
+    // RPC for searching documents with a threshold
+    rpc SearchWithThreshold(SearchWithThresholdRequest) returns (SearchResponse) {};
+
+    // RPC for checking if an index exists
+    rpc IndexExists(IndexExistsRequest) returns (IndexExistsResponse);
+}
+
+// Define the request message for uploading a document
+message UploadDocumentRequest {
+  string document_id = 1;              // Unique ID of the document
+  string index_name = 2;               // Optional logical tag. Do not pass QA OpenSearch aliases here.
+  oneof document_source {
+    string document_content = 3;       // Content of the document (if it is small)
+    string document_url = 4;           // URL of the document (if it is large)
+  }
+  map<string, string> metadata = 5;    // Metadata (author, source, etc.)
+}
+
+// Define the response message for uploading a document
+message UploadDocumentResponse {
+  string document_id = 1;              // ID of the uploaded document
+  bool success = 2;                    // Success of the operation
+  string message = 3;                  // Error or status message
+}
+
+// MetadataFilter defines a filter on an indexed metadata field
+message MetadataFilter {
+  string field = 1;                        // Metadata field name (must be indexed)
+  repeated string values = 2;              // Values to match (OR logic within a single filter)
+}
+
+// SearchWithThresholdRequest is the request message for searching documents
+message SearchWithThresholdRequest {
+  string query = 1;                        // Text search query
+  int32 top_k = 2;                         // Number of relevant documents
+  float alpha = 3;                         // Weight of search (0.0 - only vector search, 1.0 - only text search)
+  string index_name = 4;                   // Deprecated, unused. Scope search via document_ids.
+  float threshold = 5;                     // Minimum similarity score (0.0-1.0), if 0 server uses default
+  repeated string document_ids = 6;        // List of document_ids to search across
+  repeated MetadataFilter filters = 7;     // Additional metadata filters (AND logic between filters)
+}
+
+// Define the response message for searching documents
+message SearchResponse {
+  repeated SearchResult results = 1;   // Found documents
+}
+
+// Define the search result message
+message SearchResult {
+  string document_id = 1;              // ID of the document in OpenSearch
+  string page_content = 2;             // Text fragment
+  map<string, string> metadata = 3;    // Metadata
+  float score = 4;                     // Final scoring of the document
+}
+
+// Define delete index request
+message DeleteIndexRequest {
+  string index_name = 1;               // Legacy field name. Carries document_id, not a real index name.
+}
+
+// Define delete index response
+message DeleteIndexResponse {
+  bool success = 1;                    // Success of the operation
+  string message = 2;                  // Error or status message
+}
+
+// Define index exists request
+message IndexExistsRequest {
+  string index_name = 1;               // Legacy field name. Carries document_id, not a real index name.
+}
+// Define index exists response
+message IndexExistsResponse {
+  bool exists = 1;                     // True if the index exists
+  string message = 2;                  // Error or status message
+}

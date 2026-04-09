@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.pyc
+*.pyo
+*.pyd
+build/
+dist/
+*.egg-info/
+.coverage
+coverage.xml
+allure-results/
+allure-report/
+.env
+artifacts/runs/
