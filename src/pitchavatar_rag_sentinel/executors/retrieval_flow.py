@@ -14,6 +14,7 @@ from pitchavatar_rag_sentinel.clients.rag_client import RagServiceClient
 from pitchavatar_rag_sentinel.config import SentinelSettings
 from pitchavatar_rag_sentinel.datasets.models import QueryCaseSpec, RetrievalDataset
 from pitchavatar_rag_sentinel.evaluators.retrieval import (
+    RetrievedChunk,
     RetrievalEvaluationResult,
     evaluate_retrieval_query,
 )
@@ -318,6 +319,13 @@ class RetrievalFlowExecutor:
             query_case=query_case,
             returned_document_ids=returned_document_ids,
             key_to_runtime_id=key_to_runtime_id,
+            returned_chunks=[
+                RetrievedChunk(
+                    document_id=result.document_id,
+                    content=result.page_content,
+                )
+                for result in response.results
+            ],
         )
 
         artifact_path = self._artifacts.write_json(

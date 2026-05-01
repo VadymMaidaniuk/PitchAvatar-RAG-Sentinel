@@ -21,8 +21,23 @@ class QueryExpectations(BaseModel):
     expected_top1: str | None = None
     expected_in_topk: list[str] = Field(default_factory=list)
     forbidden_docs: list[str] = Field(default_factory=list)
+    expected_top1_chunk_contains: list[str] = Field(default_factory=list)
+    expected_in_topk_chunk_contains: list[str] = Field(default_factory=list)
+    forbidden_chunk_contains: list[str] = Field(default_factory=list)
     min_results: int = 1
     expect_empty: bool = False
+
+    @model_validator(mode="after")
+    def validate_chunk_fragments(self) -> "QueryExpectations":
+        for field_name in (
+            "expected_top1_chunk_contains",
+            "expected_in_topk_chunk_contains",
+            "forbidden_chunk_contains",
+        ):
+            fragments = getattr(self, field_name)
+            if any(not fragment.strip() for fragment in fragments):
+                raise ValueError(f"{field_name} fragments must not be empty")
+        return self
 
 
 class QueryCaseSpec(BaseModel):

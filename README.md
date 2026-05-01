@@ -144,11 +144,37 @@ Each query can declare:
 
 Expectations currently support:
 
+Document-level checks:
+
 - `expected_top1`
 - `expected_in_topk`
 - `forbidden_docs`
 - `min_results`
 - `expect_empty`
+
+Chunk-level checks:
+
+- `expected_top1_chunk_contains`: the top returned chunk must contain every listed fragment
+- `expected_in_topk_chunk_contains`: at least one returned chunk must contain every listed fragment
+- `forbidden_chunk_contains`: no returned chunk may contain any listed fragment
+
+Chunk checks are deterministic text checks, not LLM evaluation. Matching is case-insensitive
+and normalizes whitespace before comparing fragments.
+
+Example chunk-level expectation:
+
+```json
+{
+  "query_id": "q_chunk_scope",
+  "query": "What does the runbook say about rollback?",
+  "alpha": 0.5,
+  "expectations": {
+    "expected_top1": "doc_runbook",
+    "expected_top1_chunk_contains": ["rollback window", "approval"],
+    "forbidden_chunk_contains": ["deprecated procedure"]
+  }
+}
+```
 
 Example dataset:
 
