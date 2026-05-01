@@ -1,0 +1,69 @@
+{
+  "dataset_id": "chunk_boundary_v1",
+  "description": "Chunk-level checks where returning the correct document is not enough; the returned chunk must contain the expected section text.",
+  "documents": [
+    {
+      "key": "doc_ops_multi_section",
+      "content": "Section Alpha cache warmup: run the cache hydration marker ALPHA-113 before opening the dashboard. Section Beta rollback: confirm the rollback guard token BETA-742 and capture the release owner approval before disabling the feature flag. Section Gamma audit: attach the deployment evidence packet after the incident channel is closed.",
+      "metadata": {
+        "user_id": "qa-chunking",
+        "type": "runbook",
+        "topic": "operations"
+      },
+      "min_expected_chunks": 1
+    },
+    {
+      "key": "doc_ops_decoy",
+      "content": "Rollback planning memo: collect customer impact notes and schedule a review meeting, but do not use the BETA-742 guard token from the operations runbook.",
+      "metadata": {
+        "user_id": "qa-chunking",
+        "type": "memo",
+        "topic": "operations"
+      },
+      "min_expected_chunks": 1
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "q_boundary_beta_rollback",
+      "query": "rollback guard token BETA-742 approval",
+      "alpha": 0.5,
+      "top_k": 4,
+      "threshold": 0.0,
+      "document_scope": [
+        "doc_ops_multi_section",
+        "doc_ops_decoy"
+      ],
+      "expectations": {
+        "expected_top1": "doc_ops_multi_section",
+        "expected_top1_chunk_contains": [
+          "Section Beta rollback",
+          "rollback guard token BETA-742",
+          "release owner approval"
+        ],
+        "forbidden_docs": [
+          "doc_ops_decoy"
+        ],
+        "min_results": 1
+      }
+    },
+    {
+      "query_id": "q_boundary_alpha_warmup",
+      "query": "cache hydration marker ALPHA-113",
+      "alpha": 1.0,
+      "top_k": 4,
+      "threshold": 0.0,
+      "document_scope": [
+        "doc_ops_multi_section"
+      ],
+      "expectations": {
+        "expected_top1": "doc_ops_multi_section",
+        "expected_top1_chunk_contains": [
+          "Section Alpha cache warmup",
+          "cache hydration marker ALPHA-113"
+        ],
+        "min_results": 1
+      }
+    }
+  ]
+}

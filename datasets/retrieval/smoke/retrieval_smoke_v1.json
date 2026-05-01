@@ -1,0 +1,72 @@
+{
+  "dataset_id": "retrieval_smoke_v1",
+  "description": "Minimal real-environment retrieval sanity check with document-level and chunk-level expectations.",
+  "documents": [
+    {
+      "key": "doc_release",
+      "content": "Harbor release window checklist: deploy only during the Tuesday maintenance window. The rollback approval code RSM-17 must be recorded before traffic is shifted back.",
+      "metadata": {
+        "user_id": "qa-smoke",
+        "type": "runbook",
+        "topic": "release"
+      },
+      "min_expected_chunks": 1
+    },
+    {
+      "key": "doc_billing",
+      "content": "Billing support checklist: invoice dispute tickets require the customer account id, billing period, and the adjustment reason before escalation.",
+      "metadata": {
+        "user_id": "qa-smoke",
+        "type": "guide",
+        "topic": "billing"
+      },
+      "min_expected_chunks": 1
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "q_smoke_release_window",
+      "query": "Harbor rollback approval code",
+      "alpha": 0.5,
+      "top_k": 3,
+      "threshold": 0.0,
+      "document_scope": "all",
+      "expectations": {
+        "expected_top1": "doc_release",
+        "expected_in_topk": [
+          "doc_release"
+        ],
+        "forbidden_docs": [
+          "doc_billing"
+        ],
+        "expected_top1_chunk_contains": [
+          "Harbor release window",
+          "rollback approval code RSM-17"
+        ],
+        "forbidden_chunk_contains": [
+          "invoice dispute"
+        ],
+        "min_results": 1
+      }
+    },
+    {
+      "query_id": "q_smoke_billing_dispute",
+      "query": "invoice dispute adjustment reason",
+      "alpha": 1.0,
+      "top_k": 3,
+      "threshold": 0.0,
+      "document_scope": "all",
+      "expectations": {
+        "expected_top1": "doc_billing",
+        "expected_in_topk_chunk_contains": [
+          "customer account id",
+          "adjustment reason"
+        ],
+        "forbidden_docs": [
+          "doc_release"
+        ],
+        "min_results": 1
+      }
+    }
+  ]
+}

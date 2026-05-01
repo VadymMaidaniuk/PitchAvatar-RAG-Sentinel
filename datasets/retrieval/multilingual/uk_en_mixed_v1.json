@@ -1,0 +1,76 @@
+{
+  "dataset_id": "uk_en_mixed_v1",
+  "description": "Ukrainian and English mixed retrieval checks with deterministic chunk fragments.",
+  "documents": [
+    {
+      "key": "doc_uk_ops",
+      "content": "Операційна нотатка: якщо черга індексації Atlas зупинилась, перезапустіть worker ingestion-atlas і перевірте метрику queue_depth. Власник процесу - команда пошуку.",
+      "metadata": {
+        "user_id": "qa-multilingual",
+        "type": "runbook",
+        "language": "uk"
+      },
+      "min_expected_chunks": 1
+    },
+    {
+      "key": "doc_en_presentations",
+      "content": "PitchAvatar presentation mode guide: when slide rendering is delayed, enable the fallback cache and verify that speaker notes remain synchronized.",
+      "metadata": {
+        "user_id": "qa-multilingual",
+        "type": "guide",
+        "language": "en"
+      },
+      "min_expected_chunks": 1
+    },
+    {
+      "key": "doc_uk_hr",
+      "content": "HR policy note: заяви на відпустку потрібно погодити з менеджером мінімум за три робочі дні до початку відсутності.",
+      "metadata": {
+        "user_id": "qa-multilingual",
+        "type": "policy",
+        "language": "uk"
+      },
+      "min_expected_chunks": 1
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "q_uk_indexing_worker",
+      "query": "що робити якщо черга індексації Atlas зупинилась",
+      "alpha": 0.5,
+      "top_k": 5,
+      "threshold": 0.0,
+      "document_scope": "all",
+      "expectations": {
+        "expected_top1": "doc_uk_ops",
+        "expected_top1_chunk_contains": [
+          "черга індексації Atlas",
+          "перезапустіть worker ingestion-atlas"
+        ],
+        "forbidden_docs": [
+          "doc_uk_hr"
+        ],
+        "min_results": 1
+      }
+    },
+    {
+      "query_id": "q_en_presentation_fallback",
+      "query": "presentation mode fallback cache speaker notes",
+      "alpha": 0.5,
+      "top_k": 5,
+      "threshold": 0.0,
+      "document_scope": "all",
+      "expectations": {
+        "expected_top1": "doc_en_presentations",
+        "expected_in_topk_chunk_contains": [
+          "fallback cache",
+          "speaker notes remain synchronized"
+        ],
+        "forbidden_docs": [
+          "doc_uk_hr"
+        ],
+        "min_results": 1
+      }
+    }
+  ]
+}

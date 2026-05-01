@@ -1,0 +1,60 @@
+{
+  "dataset_id": "negative_queries_v1",
+  "description": "Negative retrieval checks for unrelated queries and forbidden document absence.",
+  "documents": [
+    {
+      "key": "doc_incident",
+      "content": "Falcon incident response guide: collect the trace id, freeze deployment, and notify the search on-call before restarting the worker.",
+      "metadata": {
+        "user_id": "qa-negative",
+        "type": "runbook"
+      },
+      "min_expected_chunks": 1
+    },
+    {
+      "key": "doc_finance",
+      "content": "Quarterly finance close guide: validate ledger totals, attach the variance sheet, and confirm revenue recognition notes.",
+      "metadata": {
+        "user_id": "qa-negative",
+        "type": "finance"
+      },
+      "min_expected_chunks": 1
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "q_negative_unrelated_empty",
+      "query": "volcanic dessert guitar tuning",
+      "alpha": 1.0,
+      "top_k": 3,
+      "threshold": 0.95,
+      "document_scope": "all",
+      "expectations": {
+        "expect_empty": true,
+        "min_results": 0
+      }
+    },
+    {
+      "query_id": "q_negative_forbidden_finance",
+      "query": "worker restart trace id",
+      "alpha": 0.5,
+      "top_k": 3,
+      "threshold": 0.0,
+      "document_scope": [
+        "doc_incident"
+      ],
+      "expectations": {
+        "expected_in_topk": [
+          "doc_incident"
+        ],
+        "forbidden_docs": [
+          "doc_finance"
+        ],
+        "forbidden_chunk_contains": [
+          "revenue recognition"
+        ],
+        "min_results": 1
+      }
+    }
+  ]
+}

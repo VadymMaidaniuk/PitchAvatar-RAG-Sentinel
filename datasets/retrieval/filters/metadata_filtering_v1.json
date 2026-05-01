@@ -1,0 +1,91 @@
+{
+  "dataset_id": "metadata_filtering_v1",
+  "description": "Metadata filter and document scope retrieval checks with similar documents split by user and tenant metadata.",
+  "documents": [
+    {
+      "key": "doc_alpha_tenant",
+      "content": "Atlas password reset runbook for the alpha tenant. The alpha tenant escalation queue is IDENTITY-ALPHA and the recovery note mentions blue dashboard access.",
+      "metadata": {
+        "user_id": "user-alpha",
+        "type": "runbook",
+        "tenant": "alpha"
+      },
+      "min_expected_chunks": 1
+    },
+    {
+      "key": "doc_beta_tenant",
+      "content": "Atlas password reset runbook for the beta tenant. The beta tenant escalation queue is IDENTITY-BETA and the recovery note mentions green dashboard access.",
+      "metadata": {
+        "user_id": "user-beta",
+        "type": "runbook",
+        "tenant": "beta"
+      },
+      "min_expected_chunks": 1
+    },
+    {
+      "key": "doc_storage_policy",
+      "content": "Storage retention policy: archive export files after thirty days and request approval before restoring deleted snapshots.",
+      "metadata": {
+        "user_id": "user-alpha",
+        "type": "policy",
+        "tenant": "shared"
+      },
+      "min_expected_chunks": 1
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "q_filter_beta_tenant",
+      "query": "Atlas password reset escalation queue",
+      "alpha": 0.5,
+      "top_k": 5,
+      "threshold": 0.0,
+      "document_scope": "all",
+      "filters": [
+        {
+          "field": "user_id",
+          "values": [
+            "user-beta"
+          ]
+        }
+      ],
+      "expectations": {
+        "expected_top1": "doc_beta_tenant",
+        "expected_in_topk": [
+          "doc_beta_tenant"
+        ],
+        "forbidden_docs": [
+          "doc_alpha_tenant",
+          "doc_storage_policy"
+        ],
+        "expected_top1_chunk_contains": [
+          "beta tenant escalation queue",
+          "IDENTITY-BETA"
+        ],
+        "min_results": 1
+      }
+    },
+    {
+      "query_id": "q_scope_alpha_tenant",
+      "query": "blue dashboard access",
+      "alpha": 1.0,
+      "top_k": 3,
+      "threshold": 0.0,
+      "document_scope": [
+        "doc_alpha_tenant"
+      ],
+      "expectations": {
+        "expected_top1": "doc_alpha_tenant",
+        "forbidden_docs": [
+          "doc_beta_tenant",
+          "doc_storage_policy"
+        ],
+        "expected_top1_chunk_contains": [
+          "alpha tenant escalation queue",
+          "blue dashboard access"
+        ],
+        "min_results": 1
+      }
+    }
+  ]
+}

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from pitchavatar_rag_sentinel.datasets.loader import discover_datasets, load_dataset
+from pitchavatar_rag_sentinel.datasets.loader import load_dataset
 from pitchavatar_rag_sentinel.datasets.models import QueryCaseSpec
 from pitchavatar_rag_sentinel.evaluators.retrieval import (
     RetrievedChunk,
@@ -179,7 +179,10 @@ def test_document_level_expectations_still_pass_as_before() -> None:
 
 
 def test_existing_datasets_without_chunk_fields_still_validate() -> None:
-    datasets = [load_dataset(path) for path in discover_datasets(Path("datasets/retrieval"))]
+    datasets = [
+        load_dataset(Path("datasets/retrieval/quantum_baseline.json")),
+        load_dataset(Path("datasets/retrieval/retrieval_baseline_v1.json")),
+    ]
 
     assert datasets
     for dataset in datasets:

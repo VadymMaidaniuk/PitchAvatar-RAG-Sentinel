@@ -148,7 +148,7 @@ Document-level checks:
 
 - `expected_top1`
 - `expected_in_topk`
-- `forbidden_docs`
+- `forbidden_docs` (reported in artifacts as `forbidden_docs_absent`)
 - `min_results`
 - `expect_empty`
 
@@ -179,6 +179,10 @@ Example chunk-level expectation:
 Example dataset:
 
 - [quantum_baseline.json](C:/Projects/PitchAvatar-RAG-Sentinel/datasets/retrieval/quantum_baseline.json)
+
+Dataset strategy and categories:
+
+- [docs/datasets.md](C:/Projects/PitchAvatar-RAG-Sentinel/docs/datasets.md)
 
 ## Commands
 
