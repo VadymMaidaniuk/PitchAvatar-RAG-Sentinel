@@ -64,6 +64,7 @@ Before the first real run:
   - `RAG_SENTINEL_OPENSEARCH_WRITE_ALIAS`
   - `RAG_SENTINEL_OPENSEARCH_READ_ALIAS`
   - `RAG_SENTINEL_OPENSEARCH_PHYSICAL_INDEX` when known
+- allow every configured OpenSearch target explicitly with `RAG_SENTINEL_OPENSEARCH_ALLOWED_TARGETS`; Sentinel refuses to run when any write/read/physical target is missing from that allowlist
 - if your QA role only has direct `_search` access in OpenSearch, keep `RAG_SENTINEL_DELETE_FALLBACK_TO_OPENSEARCH=false` and rely on gRPC delete plus OpenSearch search-based verification
 - if you run tiny corpora, confirm the RAG service itself is started with a BM25 threshold that will not filter out everything; QA verification confirmed `RAG_SERVICE_SEARCH_BM25_MIN_SCORE=0.1` works for white-box BM25 checks
 
@@ -77,6 +78,7 @@ RAG_SENTINEL_GRPC_SERVER_NAME=qa-rag-service-dev.pitchavatar.com
 RAG_SENTINEL_OPENSEARCH_WRITE_ALIAS=dev-rag-index-qa
 RAG_SENTINEL_OPENSEARCH_READ_ALIAS=dev-rag-read-qa
 RAG_SENTINEL_OPENSEARCH_PHYSICAL_INDEX=dev-rag-index-qa-000001
+RAG_SENTINEL_OPENSEARCH_ALLOWED_TARGETS=dev-rag-index-qa,dev-rag-read-qa,dev-rag-index-qa-000001
 ```
 
 ## Layout
@@ -226,6 +228,7 @@ Recommended while QA access is limited to gRPC plus direct OpenSearch `_search`:
 - `UploadDocumentRequest.index_name` must never carry `dev-rag-index-qa`, `dev-rag-read-qa`, or the physical QA index.
 - Direct OpenSearch verification is valid for QA diagnostics and retrieval checks, but those aliases/index names remain OpenSearch-side only and must not leak into gRPC payloads.
 - The framework protects against accidental use of production-like indices by default.
+- OpenSearch write/read/physical targets must be exact-name allowlisted before Sentinel will run.
 - Sentinel supports separate OpenSearch `write/read` aliases for the QA setup.
 - `Playwright` is not needed for this stage.
 - `RAGAS` is not the core of the framework, but the structure now leaves room to add answer-level evaluation later.

@@ -18,6 +18,11 @@ def settings() -> SentinelSettings:
         opensearch_write_alias="dev-rag-index-qa",
         opensearch_read_alias="dev-rag-read-qa",
         opensearch_physical_index="dev-rag-index-qa-000001",
+        opensearch_allowed_targets=[
+            "dev-rag-index-qa",
+            "dev-rag-read-qa",
+            "dev-rag-index-qa-000001",
+        ],
     )
 
 

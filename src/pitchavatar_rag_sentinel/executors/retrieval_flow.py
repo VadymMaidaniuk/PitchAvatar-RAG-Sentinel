@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import asdict, dataclass
+import traceback as traceback_module
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import grpc
+from opensearchpy.exceptions import OpenSearchException
 
 from pitchavatar_rag_sentinel.clients.opensearch_helper import OpenSearchHelper
 from pitchavatar_rag_sentinel.clients.rag_client import RagServiceClient
@@ -50,6 +52,9 @@ class CleanupResult:
     grpc_message: str | None
     fallback_cleanup_used: bool
     cleanup_verified: bool
+    cleanup_status: str
+    cleanup_method: str
+    cleanup_errors: list[dict[str, str | None]] = field(default_factory=list)
     error: str | None = None
 
 
@@ -128,7 +133,25 @@ class RetrievalFlowExecutor:
             original_error = exc
         finally:
             if seeded_documents:
-                cleanup_results = self._cleanup_seeded_documents(list(seeded_documents.values()))
+                try:
+                    cleanup_results = self._cleanup_seeded_documents(list(seeded_documents.values()))
+                except Exception as exc:  # noqa: BLE001
+                    cleanup_error = self._cleanup_error_details("cleanup_loop", exc)
+                    logger.exception("Cleanup loop failed before all results could be recorded.")
+                    cleanup_results = [
+                        CleanupResult(
+                            runtime_document_id="__cleanup_loop__",
+                            grpc_delete_attempted=False,
+                            grpc_delete_success=False,
+                            grpc_message=None,
+                            fallback_cleanup_used=False,
+                            cleanup_verified=False,
+                            cleanup_status="failed",
+                            cleanup_method="cleanup_loop",
+                            cleanup_errors=[cleanup_error],
+                            error=cleanup_error["error_repr"],
+                        )
+                    ]
 
         summary = DatasetRunSummary(
             dataset_id=dataset.dataset_id,
@@ -302,7 +325,8 @@ class RetrievalFlowExecutor:
             grpc_message: str | None = None
             fallback_cleanup_used = False
             cleanup_verified = False
-            error: str | None = None
+            cleanup_method = "grpc_delete"
+            cleanup_errors: list[dict[str, str | None]] = []
 
             try:
                 logger.info("Cleaning up runtime document %r via gRPC delete.", document.runtime_document_id)
@@ -315,9 +339,15 @@ class RetrievalFlowExecutor:
                 )
                 cleanup_verified = True
                 logger.info("Cleanup verified for runtime document %r.", document.runtime_document_id)
-            except (grpc.RpcError, RuntimeError, TimeoutError) as exc:
-                error = str(exc)
+            except (grpc.RpcError, RuntimeError, TimeoutError, OpenSearchException) as exc:
+                cleanup_errors.append(self._cleanup_error_details(cleanup_method, exc))
+                logger.warning(
+                    "Cleanup via gRPC failed for runtime document %r.",
+                    document.runtime_document_id,
+                    exc_info=True,
+                )
                 if self._settings.delete_fallback_to_opensearch:
+                    cleanup_method = "opensearch_delete_by_query"
                     try:
                         fallback_cleanup_used = True
                         logger.info(
@@ -334,8 +364,69 @@ class RetrievalFlowExecutor:
                             "Fallback cleanup verified for runtime document %r.",
                             document.runtime_document_id,
                         )
+                    except (RuntimeError, TimeoutError, OpenSearchException) as fallback_exc:
+                        cleanup_errors.append(
+                            self._cleanup_error_details(cleanup_method, fallback_exc)
+                        )
+                        logger.warning(
+                            "Fallback OpenSearch cleanup failed for runtime document %r.",
+                            document.runtime_document_id,
+                            exc_info=True,
+                        )
                     except Exception as fallback_exc:  # noqa: BLE001
-                        error = f"{error}; fallback_cleanup_error={fallback_exc}"
+                        cleanup_errors.append(
+                            self._cleanup_error_details(cleanup_method, fallback_exc)
+                        )
+                        logger.exception(
+                            "Unexpected fallback cleanup failure for runtime document %r.",
+                            document.runtime_document_id,
+                        )
+            except Exception as exc:  # noqa: BLE001
+                cleanup_errors.append(self._cleanup_error_details(cleanup_method, exc))
+                logger.exception(
+                    "Unexpected cleanup failure for runtime document %r.",
+                    document.runtime_document_id,
+                )
+                if self._settings.delete_fallback_to_opensearch:
+                    cleanup_method = "opensearch_delete_by_query"
+                    try:
+                        fallback_cleanup_used = True
+                        logger.info(
+                            "Falling back to direct OpenSearch cleanup for runtime document %r.",
+                            document.runtime_document_id,
+                        )
+                        self._opensearch.cleanup_document(document.runtime_document_id)
+                        self._opensearch.wait_until_document_absent(
+                            document.runtime_document_id,
+                            timeout_seconds=self._settings.cleanup_wait_timeout_seconds,
+                        )
+                        cleanup_verified = True
+                        logger.info(
+                            "Fallback cleanup verified for runtime document %r.",
+                            document.runtime_document_id,
+                        )
+                    except (RuntimeError, TimeoutError, OpenSearchException) as fallback_exc:
+                        cleanup_errors.append(
+                            self._cleanup_error_details(cleanup_method, fallback_exc)
+                        )
+                        logger.warning(
+                            "Fallback OpenSearch cleanup failed for runtime document %r.",
+                            document.runtime_document_id,
+                            exc_info=True,
+                        )
+                    except Exception as fallback_exc:  # noqa: BLE001
+                        cleanup_errors.append(
+                            self._cleanup_error_details(cleanup_method, fallback_exc)
+                        )
+                        logger.exception(
+                            "Unexpected fallback cleanup failure for runtime document %r.",
+                            document.runtime_document_id,
+                        )
+
+            cleanup_status = "verified" if cleanup_verified else "failed"
+            error = "; ".join(error_detail["error_repr"] or "" for error_detail in cleanup_errors)
+            if not error:
+                error = None
 
             cleanup_results.append(
                 CleanupResult(
@@ -345,8 +436,25 @@ class RetrievalFlowExecutor:
                     grpc_message=grpc_message,
                     fallback_cleanup_used=fallback_cleanup_used,
                     cleanup_verified=cleanup_verified,
+                    cleanup_status=cleanup_status,
+                    cleanup_method=cleanup_method,
+                    cleanup_errors=cleanup_errors,
                     error=error,
                 )
             )
 
         return cleanup_results
+
+    @staticmethod
+    def _cleanup_error_details(method: str, exc: BaseException) -> dict[str, str | None]:
+        traceback = None
+        if exc.__traceback__ is not None:
+            traceback = "".join(
+                traceback_module.format_exception(type(exc), exc, exc.__traceback__)
+            )
+        return {
+            "method": method,
+            "error_type": f"{type(exc).__module__}.{type(exc).__name__}",
+            "error_repr": repr(exc),
+            "traceback": traceback,
+        }

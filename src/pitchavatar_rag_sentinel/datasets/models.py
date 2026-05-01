@@ -56,6 +56,10 @@ class RetrievalDataset(BaseModel):
         if len(document_keys) != len(set(document_keys)):
             raise ValueError("document keys must be unique within a dataset")
 
+        query_ids = [query.query_id for query in self.queries]
+        if len(query_ids) != len(set(query_ids)):
+            raise ValueError("query_id values must be unique within a dataset")
+
         document_key_set = set(document_keys)
         for query in self.queries:
             if query.document_scope != "all":
@@ -80,4 +84,3 @@ class RetrievalDataset(BaseModel):
                     f"{missing_expectations}"
                 )
         return self
-

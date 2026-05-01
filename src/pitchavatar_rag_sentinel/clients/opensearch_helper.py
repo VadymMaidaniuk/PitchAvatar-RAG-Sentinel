@@ -53,6 +53,7 @@ TEST_INDEX_MAPPING = {
 
 class OpenSearchHelper:
     def __init__(self, settings: SentinelSettings) -> None:
+        settings.assert_safe_index()
         self._settings = settings
         self._bootstrap_warning_logged = False
         self._refresh_warning_logged = False
@@ -134,6 +135,7 @@ class OpenSearchHelper:
         return hits
 
     def cleanup_document(self, document_id: str) -> None:
+        self._settings.assert_safe_index()
         self._client.delete_by_query(
             index=self.write_index_name,
             body={"query": {"term": {"metadata.document_id": document_id}}},
@@ -204,6 +206,7 @@ class OpenSearchHelper:
         raise TimeoutError(f"Document {document_id!r} was not deleted in time.")
 
     def bulk_insert_test_chunks(self, document_id: str, num_chunks: int) -> None:
+        self._settings.assert_safe_index()
         helpers.bulk(
             self._client,
             self._chunk_actions(document_id, num_chunks),

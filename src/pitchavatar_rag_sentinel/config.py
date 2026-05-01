@@ -3,9 +3,10 @@ from __future__ import annotations
 import os
 import re
 from functools import lru_cache
+from typing import Annotated
 
-from pydantic import Field, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class SentinelSettings(BaseSettings):
@@ -34,6 +35,7 @@ class SentinelSettings(BaseSettings):
     opensearch_write_alias: str | None = None
     opensearch_read_alias: str | None = None
     opensearch_physical_index: str | None = None
+    opensearch_allowed_targets: Annotated[list[str], NoDecode] = Field(default_factory=list)
     auto_create_index: bool = True
     allow_protected_index: bool = False
     protected_index_pattern: str = r"^(dev|stage|prod)-rag-(index|read)(-\d{6})?$"
@@ -44,7 +46,7 @@ class SentinelSettings(BaseSettings):
     search_top_k: int = 10
     search_threshold: float = 0.3
     artifacts_dir: str = "artifacts/runs"
-    delete_fallback_to_opensearch: bool = True
+    delete_fallback_to_opensearch: bool = False
 
     redis_url: str | None = None
 
@@ -76,6 +78,13 @@ class SentinelSettings(BaseSettings):
             os.getenv("RAG_SERVICE_DEFAULT_SEARCH_INDEX_NAME"),
         )
         return merged
+
+    @field_validator("opensearch_allowed_targets", mode="before")
+    @classmethod
+    def parse_opensearch_allowed_targets(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [target.strip() for target in value.split(",") if target.strip()]
+        return value
 
     @property
     def opensearch_auth(self) -> tuple[str, str] | None:
@@ -126,18 +135,40 @@ class SentinelSettings(BaseSettings):
                 "Configure OpenSearch read target via RAG_SENTINEL_OPENSEARCH_READ_ALIAS "
                 "or fall back to the write alias."
             )
+        self.assert_safe_index()
         return self
 
+    def configured_opensearch_targets(self) -> set[str]:
+        return {
+            target
+            for target in {
+                self.write_index_name,
+                self.read_index_name,
+                self.primary_index_name,
+            }
+            if target
+        }
+
     def assert_safe_index(self) -> None:
+        configured_targets = self.configured_opensearch_targets()
+        allowed_targets = set(self.opensearch_allowed_targets)
+        if not allowed_targets:
+            raise ValueError(
+                "SAFETY: refusing to run without RAG_SENTINEL_OPENSEARCH_ALLOWED_TARGETS. "
+                "Explicitly allow every configured OpenSearch write/read/physical target."
+            )
+        non_allowlisted_targets = sorted(configured_targets - allowed_targets)
+        if non_allowlisted_targets:
+            raise ValueError(
+                "SAFETY: refusing to run against non-allowlisted OpenSearch target(s): "
+                f"{non_allowlisted_targets}. Configure RAG_SENTINEL_OPENSEARCH_ALLOWED_TARGETS "
+                "with the exact QA index or alias names."
+            )
+
         if self.allow_protected_index:
             return
         pattern = re.compile(self.protected_index_pattern)
-        for target in {
-            self.index_name,
-            self.write_index_name,
-            self.read_index_name,
-            self.primary_index_name,
-        }:
+        for target in configured_targets:
             if target and pattern.match(target):
                 raise ValueError(
                     f"SAFETY: refusing to run against protected index {target!r}. "

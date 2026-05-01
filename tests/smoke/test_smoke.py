@@ -95,6 +95,14 @@ def settings() -> SentinelSettings:
         opensearch_url="https://unused-opensearch.local",
         opensearch_username="unused",
         opensearch_password="unused",
+        opensearch_write_alias="unused-opensearch-write",
+        opensearch_read_alias="unused-opensearch-read",
+        opensearch_physical_index="unused-opensearch-000001",
+        opensearch_allowed_targets=[
+            "unused-opensearch-write",
+            "unused-opensearch-read",
+            "unused-opensearch-000001",
+        ],
     )
 
 
