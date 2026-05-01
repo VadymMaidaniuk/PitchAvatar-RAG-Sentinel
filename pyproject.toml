@@ -50,6 +50,10 @@ addopts = "-ra"
 testpaths = ["tests"]
 pythonpath = ["src"]
 markers = [
+  "offline: tests that do not require real gRPC or OpenSearch services",
+  "integration: tests that require configured external services",
+  "grpc: tests that call the RAG service over gRPC",
+  "opensearch: tests that call OpenSearch directly",
   "smoke: minimal happy-path checks for environment readiness",
   "workflow: document lifecycle and mutation behavior checks",
   "search: retrieval, filtering, threshold, and ranking checks",

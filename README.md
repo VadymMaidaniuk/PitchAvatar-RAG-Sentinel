@@ -66,6 +66,7 @@ Before the first real run:
   - `RAG_SENTINEL_OPENSEARCH_PHYSICAL_INDEX` when known
 - allow every configured OpenSearch target explicitly with `RAG_SENTINEL_OPENSEARCH_ALLOWED_TARGETS`; Sentinel refuses to run when any write/read/physical target is missing from that allowlist
 - if your QA role only has direct `_search` access in OpenSearch, keep `RAG_SENTINEL_DELETE_FALLBACK_TO_OPENSEARCH=false` and rely on gRPC delete plus OpenSearch search-based verification
+- keep `RAG_SENTINEL_FAIL_ON_CLEANUP_ERROR=true` unless you explicitly want retrieval evaluation to pass while reporting cleanup failures as warnings
 - if you run tiny corpora, confirm the RAG service itself is started with a BM25 threshold that will not filter out everything; QA verification confirmed `RAG_SERVICE_SEARCH_BM25_MIN_SCORE=0.1` works for white-box BM25 checks
 
 Recommended QA values:
@@ -79,6 +80,8 @@ RAG_SENTINEL_OPENSEARCH_WRITE_ALIAS=dev-rag-index-qa
 RAG_SENTINEL_OPENSEARCH_READ_ALIAS=dev-rag-read-qa
 RAG_SENTINEL_OPENSEARCH_PHYSICAL_INDEX=dev-rag-index-qa-000001
 RAG_SENTINEL_OPENSEARCH_ALLOWED_TARGETS=dev-rag-index-qa,dev-rag-read-qa,dev-rag-index-qa-000001
+RAG_SENTINEL_DELETE_FALLBACK_TO_OPENSEARCH=false
+RAG_SENTINEL_FAIL_ON_CLEANUP_ERROR=true
 ```
 
 ## Layout
@@ -153,7 +156,19 @@ Example dataset:
 
 ## Commands
 
-Run the dataset suite:
+Run the offline suite used by CI. This does not require real gRPC or OpenSearch:
+
+```powershell
+.venv\Scripts\python -m pytest -m "not integration and not destructive" -vv
+```
+
+Equivalent local profile:
+
+```powershell
+.\scripts\test.ps1 -Profile offline
+```
+
+Run the full dataset suite against configured services. These tests mutate the QA environment and are marked `integration`, `grpc`, `opensearch`, and `destructive`:
 
 ```powershell
 .venv\Scripts\python -m pytest tests\retrieval -vv
@@ -169,6 +184,12 @@ Run one dataset manually and print summary:
 
 ```powershell
 .venv\Scripts\python scripts\run_dataset.py datasets\retrieval\quantum_baseline.json --summary
+```
+
+Validate a dataset run plan without gRPC/OpenSearch calls:
+
+```powershell
+.venv\Scripts\python scripts\run_dataset.py datasets\retrieval\quantum_baseline.json --dry-run
 ```
 
 Run the gRPC-only smoke suite:
@@ -199,6 +220,11 @@ Artifacts contain:
 - evaluation results
 - seeded runtime document ids
 - cleanup status
+- cleanup warnings and structured cleanup errors when cleanup fails
+
+By default `RAG_SENTINEL_FAIL_ON_CLEANUP_ERROR=true`, so a final cleanup failure makes the
+overall run fail after `summary.json` is written. Set it to `false` only when you want retrieval
+results to pass while cleanup failures are preserved as warnings in the summary artifact.
 
 ## Current scope
 
@@ -220,6 +246,7 @@ Recommended while QA access is limited to gRPC plus direct OpenSearch `_search`:
 - `grpc` profile: local contract tests plus gRPC-only smoke
 - `available` profile: `grpc` plus white-box OpenSearch search checks in `smoke`, `search`, and `workflow`
 - full dataset retrieval runs stay available, but they are no longer the default recommendation for partial-access QA roles
+- CI and local offline checks should use `pytest -m "not integration and not destructive"` so real service tests do not run accidentally.
 
 ## Notes
 

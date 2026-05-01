@@ -4,6 +4,8 @@ import pytest
 
 from pitchavatar_rag_sentinel.datasets.models import RetrievalDataset
 
+pytestmark = pytest.mark.offline
+
 
 def test_duplicate_query_id_fails_dataset_validation() -> None:
     with pytest.raises(ValueError, match="query_id values must be unique"):

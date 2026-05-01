@@ -10,6 +10,8 @@ from pitchavatar_rag_sentinel.config import SentinelSettings
 from pitchavatar_rag_sentinel.utils.assertions import unique_document_ids
 from pitchavatar_rag_sentinel.utils.naming import unique_document_id
 
+pytestmark = [pytest.mark.integration, pytest.mark.grpc]
+
 
 def _wait_until(
     condition: Callable[[], bool],

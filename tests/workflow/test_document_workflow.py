@@ -5,6 +5,8 @@ import pytest
 from pitchavatar_rag_sentinel.clients.opensearch_helper import OpenSearchHelper
 from pitchavatar_rag_sentinel.clients.rag_client import RagServiceClient
 
+pytestmark = [pytest.mark.integration, pytest.mark.grpc, pytest.mark.opensearch]
+
 
 @pytest.mark.workflow
 @pytest.mark.destructive
@@ -85,4 +87,3 @@ def test_metadata_is_preserved_in_opensearch(
     assert first_metadata["user_id"] == "user-42"
     assert first_metadata["type"] == "docx"
     assert first_metadata["custom_key"] == "custom_value"
-

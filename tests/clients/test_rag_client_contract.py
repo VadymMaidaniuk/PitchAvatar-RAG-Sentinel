@@ -5,6 +5,8 @@ import pytest
 from pitchavatar_rag_sentinel.clients.rag_client import RagServiceClient
 from pitchavatar_rag_sentinel.config import SentinelSettings
 
+pytestmark = pytest.mark.offline
+
 
 @pytest.fixture()
 def settings() -> SentinelSettings:

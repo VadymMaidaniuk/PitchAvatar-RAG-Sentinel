@@ -12,6 +12,8 @@ from pitchavatar_rag_sentinel.utils.assertions import (
 )
 from tests.fixtures.search_corpus import SearchCorpus, build_search_corpus
 
+pytestmark = [pytest.mark.integration, pytest.mark.grpc, pytest.mark.opensearch]
+
 
 @pytest.fixture()
 def search_corpus(
@@ -102,4 +104,3 @@ def test_invalid_alpha_returns_invalid_argument(
     message = str(error.value)
     assert "InvalidArgument" in message
     assert "alpha must be" in message
-

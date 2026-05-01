@@ -9,6 +9,7 @@ from pitchavatar_rag_sentinel.clients.opensearch_helper import OpenSearchHelper
 from pitchavatar_rag_sentinel.clients.rag_client import RagServiceClient
 from pitchavatar_rag_sentinel.config import get_settings
 from pitchavatar_rag_sentinel.datasets.loader import load_dataset
+from pitchavatar_rag_sentinel.executors.dry_run import build_dataset_dry_run_plan
 from pitchavatar_rag_sentinel.executors.retrieval_flow import RetrievalFlowExecutor
 from pitchavatar_rag_sentinel.reporting.artifacts import ArtifactWriter
 
@@ -26,6 +27,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print the JSON run summary to stdout.",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate settings and dataset, print the execution plan, and make no network calls.",
+    )
     return parser.parse_args()
 
 
@@ -34,6 +40,15 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     settings = get_settings()
     dataset = load_dataset(args.dataset)
+    if args.dry_run:
+        plan = build_dataset_dry_run_plan(
+            settings=settings,
+            dataset=dataset,
+            dataset_path=args.dataset,
+        )
+        print(json.dumps(plan, indent=2, ensure_ascii=True))
+        return 0
+
     logger.info(
         "Starting dataset run %r with %s document(s) and %s query case(s).",
         dataset.dataset_id,
@@ -61,7 +76,7 @@ def main() -> int:
     if args.summary:
         print(json.dumps(summary.to_dict(), indent=2, ensure_ascii=True))
 
-    return 0 if summary.all_queries_passed else 1
+    return 0 if summary.run_passed else 1
 
 
 if __name__ == "__main__":

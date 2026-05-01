@@ -4,6 +4,8 @@ import pytest
 
 from pitchavatar_rag_sentinel.config import SentinelSettings
 
+pytestmark = pytest.mark.offline
+
 
 def make_settings(**overrides: object) -> SentinelSettings:
     values = {
@@ -30,6 +32,7 @@ def test_default_opensearch_fallback_cleanup_is_disabled() -> None:
     settings = make_settings()
 
     assert settings.delete_fallback_to_opensearch is False
+    assert settings.fail_on_cleanup_error is True
 
 
 def test_non_allowlisted_opensearch_target_fails_fast() -> None:

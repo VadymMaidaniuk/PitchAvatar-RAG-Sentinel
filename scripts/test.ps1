@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("full", "available", "grpc")]
+    [ValidateSet("full", "available", "grpc", "offline")]
     [string]$Profile = "",
     [string]$Marker = "",
     [string[]]$Path = @()
@@ -12,6 +12,7 @@ if ($Profile -ne "" -and $Path.Count -gt 0) {
 }
 
 $targets = switch ($Profile) {
+    "offline" { @("tests") }
     "grpc" { @("tests\clients", "tests\smoke\test_smoke.py") }
     "available" { @("tests\clients", "tests\smoke", "tests\search", "tests\workflow") }
     "full" { @("tests") }
@@ -24,9 +25,15 @@ $targets = switch ($Profile) {
     }
 }
 
+$profileMarker = switch ($Profile) {
+    "offline" { "not integration and not destructive" }
+    default { "" }
+}
+$effectiveMarker = if ($Marker -ne "") { $Marker } else { $profileMarker }
+
 $args = @("-m", "pytest") + $targets
-if ($Marker -ne "") {
-    $args += @("-m", $Marker)
+if ($effectiveMarker -ne "") {
+    $args += @("-m", $effectiveMarker)
 }
 
 & .venv\Scripts\python @args

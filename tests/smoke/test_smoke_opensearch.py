@@ -10,6 +10,8 @@ from pitchavatar_rag_sentinel.config import SentinelSettings
 from pitchavatar_rag_sentinel.utils.assertions import unique_document_ids
 from pitchavatar_rag_sentinel.utils.naming import unique_document_id
 
+pytestmark = [pytest.mark.integration, pytest.mark.grpc, pytest.mark.opensearch]
+
 
 @pytest.fixture(scope="session")
 def opensearch_helper(settings: SentinelSettings) -> OpenSearchHelper:

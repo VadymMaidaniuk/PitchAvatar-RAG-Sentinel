@@ -62,7 +62,10 @@ class CleanupResult:
 class DatasetRunSummary:
     dataset_id: str
     run_id: str
+    run_passed: bool
     all_queries_passed: bool
+    cleanup_failed: bool
+    cleanup_warning: str | None
     seeded_documents: dict[str, SeededDocumentState]
     query_results: list[QueryExecutionResult]
     cleanup_results: list[CleanupResult]
@@ -73,7 +76,10 @@ class DatasetRunSummary:
         return {
             "dataset_id": self.dataset_id,
             "run_id": self.run_id,
+            "run_passed": self.run_passed,
             "all_queries_passed": self.all_queries_passed,
+            "cleanup_failed": self.cleanup_failed,
+            "cleanup_warning": self.cleanup_warning,
             "seeded_documents": {
                 key: asdict(state) for key, state in self.seeded_documents.items()
             },
@@ -153,10 +159,20 @@ class RetrievalFlowExecutor:
                         )
                     ]
 
+        all_queries_passed = run_error is None and all(result.passed for result in query_results)
+        cleanup_failed = any(not result.cleanup_verified for result in cleanup_results)
+        cleanup_warning = self._cleanup_warning(cleanup_failed)
+        run_passed = all_queries_passed and (
+            not cleanup_failed or not self._settings.fail_on_cleanup_error
+        )
+
         summary = DatasetRunSummary(
             dataset_id=dataset.dataset_id,
             run_id=run_id,
-            all_queries_passed=(run_error is None and all(result.passed for result in query_results)),
+            run_passed=run_passed,
+            all_queries_passed=all_queries_passed,
+            cleanup_failed=cleanup_failed,
+            cleanup_warning=cleanup_warning,
             seeded_documents=seeded_documents,
             query_results=query_results,
             cleanup_results=cleanup_results,
@@ -169,6 +185,19 @@ class RetrievalFlowExecutor:
                 f"Dataset run failed for {dataset.dataset_id!r}. Artifacts: {run_dir}"
             ) from original_error
         return summary
+
+    def _cleanup_warning(self, cleanup_failed: bool) -> str | None:
+        if not cleanup_failed:
+            return None
+        if self._settings.fail_on_cleanup_error:
+            return (
+                "Cleanup failed and RAG_SENTINEL_FAIL_ON_CLEANUP_ERROR=true, "
+                "so the overall run is failed."
+            )
+        return (
+            "Cleanup failed but RAG_SENTINEL_FAIL_ON_CLEANUP_ERROR=false, "
+            "so retrieval results are preserved and the cleanup failure is reported as a warning."
+        )
 
     def _seed_documents(
         self,

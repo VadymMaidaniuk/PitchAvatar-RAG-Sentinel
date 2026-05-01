@@ -47,6 +47,7 @@ class SentinelSettings(BaseSettings):
     search_threshold: float = 0.3
     artifacts_dir: str = "artifacts/runs"
     delete_fallback_to_opensearch: bool = False
+    fail_on_cleanup_error: bool = True
 
     redis_url: str | None = None
 
