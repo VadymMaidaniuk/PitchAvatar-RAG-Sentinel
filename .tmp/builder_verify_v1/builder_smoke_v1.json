@@ -1,0 +1,72 @@
+{
+  "dataset_id": "builder_smoke_v1",
+  "description": "Offline builder smoke dataset generated during Dataset Builder v1 verification.",
+  "documents": [
+    {
+      "key": "builder_generated_source_section_001_upload_limits",
+      "content": "Upload limits The upload limit for standard files is 25 MB per source document. Larger imports should be split before ingestion.",
+      "metadata": {
+        "source_file_name": "builder_generated_source.md",
+        "source_section_id": "section_001_upload_limits",
+        "source_section_title": "Upload limits",
+        "type": "md"
+      },
+      "min_expected_chunks": 1
+    },
+    {
+      "key": "builder_generated_source_section_002_billing_policy",
+      "content": "Billing policy Billing starts after the workspace trial ends. Monthly invoices include storage, retrieval calls, and premium support when enabled.",
+      "metadata": {
+        "source_file_name": "builder_generated_source.md",
+        "source_section_id": "section_002_billing_policy",
+        "source_section_title": "Billing policy",
+        "type": "md"
+      },
+      "min_expected_chunks": 1
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "q_upload_limit",
+      "query": "What is the upload limit for standard files?",
+      "alpha": 0.5,
+      "top_k": 3,
+      "threshold": 0.3,
+      "document_scope": "all",
+      "filters": [],
+      "expectations": {
+        "expected_top1": "builder_generated_source_section_001_upload_limits",
+        "expected_in_topk": [],
+        "forbidden_docs": [],
+        "expected_top1_chunk_contains": [
+          "25 MB per source document"
+        ],
+        "expected_in_topk_chunk_contains": [],
+        "forbidden_chunk_contains": [],
+        "min_results": 1,
+        "expect_empty": false
+      }
+    },
+    {
+      "query_id": "q_billing_includes",
+      "query": "What do monthly invoices include?",
+      "alpha": 0.5,
+      "top_k": 3,
+      "threshold": 0.3,
+      "document_scope": "all",
+      "filters": [],
+      "expectations": {
+        "expected_top1": "builder_generated_source_section_002_billing_policy",
+        "expected_in_topk": [],
+        "forbidden_docs": [],
+        "expected_top1_chunk_contains": [],
+        "expected_in_topk_chunk_contains": [
+          "storage, retrieval calls"
+        ],
+        "forbidden_chunk_contains": [],
+        "min_results": 1,
+        "expect_empty": false
+      }
+    }
+  ]
+}

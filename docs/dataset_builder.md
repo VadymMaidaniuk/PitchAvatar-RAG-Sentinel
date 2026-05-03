@@ -73,6 +73,15 @@ or `.md`, inspect parsed sections, enter a dataset ID, manually enter query draf
 expected document keys and chunk fragments, preview generated JSON, and download it. It does not
 run datasets or perform cleanup.
 
+Before any real retrieval run, validate downloaded/generated datasets with `--dry-run`:
+
+```powershell
+.venv\Scripts\python scripts\run_dataset.py path\to\generated_dataset.json --dry-run
+```
+
+Dry-run validation loads the same retrieval dataset schema and prints the planned document/query
+counts without constructing gRPC or OpenSearch clients.
+
 ## Limitations
 
 - No automatic question generation.

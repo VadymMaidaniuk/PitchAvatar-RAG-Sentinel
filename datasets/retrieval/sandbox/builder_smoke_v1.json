@@ -1,5 +1,5 @@
 {
-  "dataset_id": "builder_smoke_v1_draft",
+  "dataset_id": "builder_smoke_v1",
   "description": "Draft retrieval dataset generated from builder_smoke_v1.md.",
   "documents": [
     {

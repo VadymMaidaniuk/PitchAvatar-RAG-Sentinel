@@ -236,6 +236,15 @@ Preview local `.txt` or `.md` source sections for a draft dataset:
 .venv\Scripts\python scripts\preview_dataset_source.py path\to\source.md
 ```
 
+The Dataset Builder is an offline drafting helper, not an automatic dataset generator. A parsed
+file only becomes a useful retrieval dataset after QA manually defines queries, expected documents
+or sections, and expected chunk fragments. Current source parsing supports `.txt` and `.md`; PDF,
+DOCX, and PPTX are future adapters. Always dry-run generated JSON before any real retrieval run:
+
+```powershell
+.venv\Scripts\python scripts\run_dataset.py path\to\generated_dataset.json --dry-run
+```
+
 Generate a read-only HTML report from existing artifacts:
 
 ```powershell
