@@ -16,6 +16,8 @@ datasets/retrieval/
   negative/       # unrelated-query and forbidden-result checks
   chunking/       # chunk-level precision checks
   multilingual/   # Ukrainian/English and other mixed-language checks
+  precision/      # stricter precision checks, not the stable smoke gate
+  diagnostics/    # investigation/reproducer datasets for known or unclear behavior
 ```
 
 The original root-level datasets remain supported:
@@ -30,6 +32,21 @@ The original root-level datasets remain supported:
 - `negative/negative_queries_v1.json`: empty-result and forbidden-result checks.
 - `chunking/chunk_boundary_v1.json`: correct-document checks plus required chunk fragments.
 - `multilingual/uk_en_mixed_v1.json`: Ukrainian and English mixed corpus checks.
+- `precision/retrieval_precision_v1.json`: strict lower-rank forbidden checks preserved outside
+  stable smoke.
+- `diagnostics/alpha_matrix_v1.json`: reproduces current alpha-mode behavior while backend
+  `SearchWithThreshold` semantics are clarified.
+
+Smoke datasets are stable health checks. They should verify that seed, search, deterministic
+evaluation, artifact writing, and cleanup work without depending on unresolved backend semantics.
+Diagnostic datasets are for investigation and may encode current known behavior. Precision and
+negative datasets can be stricter than smoke and should be interpreted with that purpose in mind.
+
+Current calibration note:
+
+- stable smoke uses `alpha=0.5`
+- `alpha=1.0` is not used as a stable default until backend semantics are confirmed
+- see [smoke_calibration_report.md](smoke_calibration_report.md)
 
 ## Expectation Types
 

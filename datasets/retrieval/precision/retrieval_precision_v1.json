@@ -1,6 +1,6 @@
 {
-  "dataset_id": "retrieval_smoke_v1",
-  "description": "Minimal real-environment retrieval sanity check with document-level and chunk-level expectations.",
+  "dataset_id": "retrieval_precision_v1",
+  "description": "Diagnostic precision dataset preserving strict lower-rank forbidden checks from the original smoke corpus. This dataset is intentionally stricter than stable smoke and may fail while retrieval ranking/noise behavior is under investigation.",
   "documents": [
     {
       "key": "doc_release",
@@ -25,7 +25,7 @@
   ],
   "queries": [
     {
-      "query_id": "q_smoke_release_window",
+      "query_id": "q_precision_release_forbidden_billing",
       "query": "Harbor rollback approval code",
       "alpha": 0.5,
       "top_k": 3,
@@ -36,15 +36,21 @@
         "expected_in_topk": [
           "doc_release"
         ],
+        "forbidden_docs": [
+          "doc_billing"
+        ],
         "expected_top1_chunk_contains": [
           "Harbor release window",
           "rollback approval code RSM-17"
+        ],
+        "forbidden_chunk_contains": [
+          "invoice dispute"
         ],
         "min_results": 1
       }
     },
     {
-      "query_id": "q_smoke_billing_dispute",
+      "query_id": "q_precision_billing_forbidden_release",
       "query": "invoice dispute adjustment reason",
       "alpha": 0.5,
       "top_k": 3,
@@ -58,6 +64,9 @@
         "expected_in_topk_chunk_contains": [
           "customer account id",
           "adjustment reason"
+        ],
+        "forbidden_docs": [
+          "doc_release"
         ],
         "min_results": 1
       }

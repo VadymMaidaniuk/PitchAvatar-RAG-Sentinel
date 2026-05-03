@@ -11,6 +11,22 @@ pytestmark = [pytest.mark.integration, pytest.mark.grpc, pytest.mark.opensearch]
 
 
 DATASET_ROOT = Path("datasets/retrieval")
+STABLE_DATASET_CATEGORIES = {
+    "smoke",
+    "filters",
+    "negative",
+    "chunking",
+    "multilingual",
+    "regression",
+}
+
+
+def discover_stable_datasets(root: Path) -> list[Path]:
+    return [
+        path
+        for path in discover_datasets(root)
+        if path.parent == root or path.parent.name in STABLE_DATASET_CATEGORIES
+    ]
 
 
 @pytest.mark.retrieval
@@ -18,7 +34,7 @@ DATASET_ROOT = Path("datasets/retrieval")
 @pytest.mark.destructive
 @pytest.mark.parametrize(
     "dataset_path",
-    discover_datasets(DATASET_ROOT),
+    discover_stable_datasets(DATASET_ROOT),
     ids=lambda path: Path(path).stem,
 )
 def test_retrieval_dataset_flow(

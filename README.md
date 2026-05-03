@@ -189,6 +189,7 @@ Example dataset:
 Dataset strategy and categories:
 
 - [docs/datasets.md](C:/Projects/PitchAvatar-RAG-Sentinel/docs/datasets.md)
+- [docs/smoke_calibration_report.md](C:/Projects/PitchAvatar-RAG-Sentinel/docs/smoke_calibration_report.md)
 
 ## Commands
 
@@ -345,6 +346,8 @@ Recommended while QA access is limited to gRPC plus direct OpenSearch `_search`:
 - `available` profile: `grpc` plus white-box OpenSearch search checks in `smoke`, `search`, and `workflow`
 - full dataset retrieval runs stay available, but they are no longer the default recommendation for partial-access QA roles
 - CI and local offline checks should use `pytest -m "not integration and not destructive"` so real service tests do not run accidentally.
+- retrieval smoke datasets are stable health checks; diagnostic and precision datasets are for investigation or stricter retrieval behavior checks.
+- `alpha=1.0` is not used as the stable smoke default until backend `SearchWithThreshold` semantics are confirmed.
 
 ## Notes
 

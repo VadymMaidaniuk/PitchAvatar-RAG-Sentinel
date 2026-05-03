@@ -16,6 +16,8 @@ EXPECTED_CATEGORY_DIRS = {
     "negative",
     "chunking",
     "multilingual",
+    "precision",
+    "diagnostics",
 }
 NEW_DATASET_IDS = {
     "retrieval_smoke_v1",
@@ -23,6 +25,8 @@ NEW_DATASET_IDS = {
     "negative_queries_v1",
     "chunk_boundary_v1",
     "uk_en_mixed_v1",
+    "retrieval_precision_v1",
+    "alpha_matrix_v1",
 }
 
 
