@@ -1,0 +1,84 @@
+{
+  "dataset_id": "builder_smoke_v1_draft",
+  "description": "Draft retrieval dataset generated from builder_smoke_v1.md.",
+  "documents": [
+    {
+      "key": "builder_smoke_v1_section_001_pitchavatar_upload_limits",
+      "content": "PitchAvatar Upload Limits Presentations can be uploaded up to 100 MB and up to 100 slides.",
+      "metadata": {
+        "source_file_name": "builder_smoke_v1.md",
+        "source_section_id": "section_001_pitchavatar_upload_limits",
+        "source_section_title": "PitchAvatar Upload Limits",
+        "type": "md"
+      },
+      "min_expected_chunks": 1
+    },
+    {
+      "key": "builder_smoke_v1_section_002_billing_rules",
+      "content": "Billing Rules Invoice disputes require an adjustment reason and approval from billing support.",
+      "metadata": {
+        "source_file_name": "builder_smoke_v1.md",
+        "source_section_id": "section_002_billing_rules",
+        "source_section_title": "Billing Rules",
+        "type": "md"
+      },
+      "min_expected_chunks": 1
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "q_upload_limit",
+      "query": "What is the presentation upload limit?",
+      "alpha": 0.5,
+      "top_k": 3,
+      "threshold": 0.0,
+      "document_scope": [
+        "builder_smoke_v1_section_001_pitchavatar_upload_limits"
+      ],
+      "filters": [],
+      "expectations": {
+        "expected_top1": "builder_smoke_v1_section_001_pitchavatar_upload_limits",
+        "expected_in_topk": [
+          "builder_smoke_v1_section_001_pitchavatar_upload_limits"
+        ],
+        "forbidden_docs": [],
+        "expected_top1_chunk_contains": [
+          "100 MB"
+        ],
+        "expected_in_topk_chunk_contains": [
+          "100 MB"
+        ],
+        "forbidden_chunk_contains": [],
+        "min_results": 1,
+        "expect_empty": false
+      }
+    },
+    {
+      "query_id": "q_invoice_dispute",
+      "query": "What is required for invoice disputes?",
+      "alpha": 0.5,
+      "top_k": 3,
+      "threshold": 0.0,
+      "document_scope": [
+        "builder_smoke_v1_section_002_billing_rules"
+      ],
+      "filters": [],
+      "expectations": {
+        "expected_top1": "builder_smoke_v1_section_002_billing_rules",
+        "expected_in_topk": [
+          "builder_smoke_v1_section_002_billing_rules"
+        ],
+        "forbidden_docs": [],
+        "expected_top1_chunk_contains": [
+          "adjustment reason"
+        ],
+        "expected_in_topk_chunk_contains": [
+          "adjustment reason"
+        ],
+        "forbidden_chunk_contains": [],
+        "min_results": 1,
+        "expect_empty": false
+      }
+    }
+  ]
+}
