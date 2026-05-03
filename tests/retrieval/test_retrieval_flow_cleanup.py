@@ -20,6 +20,26 @@ class _Response:
         self.message = message
 
 
+class _SearchResult:
+    def __init__(
+        self,
+        *,
+        document_id: str,
+        page_content: str,
+        metadata: dict[str, str] | None = None,
+        score: float = 1.0,
+    ) -> None:
+        self.document_id = document_id
+        self.page_content = page_content
+        self.metadata = metadata or {}
+        self.score = score
+
+
+class _SearchResponse:
+    def __init__(self, results: list[_SearchResult]) -> None:
+        self.results = results
+
+
 class FakeRagClient:
     def __init__(self) -> None:
         self.deleted_document_ids: list[str] = []
@@ -30,6 +50,28 @@ class FakeRagClient:
     def delete_document(self, document_id: str) -> _Response:
         self.deleted_document_ids.append(document_id)
         return _Response(success=True, message=f"deleted {document_id}")
+
+
+class SearchableFakeRagClient(FakeRagClient):
+    def search(
+        self,
+        query: str,
+        document_ids: list[str],
+        *,
+        alpha: float,
+        top_k: int | None = None,
+        threshold: float | None = None,
+        filters: list[tuple[str, list[str]]] | None = None,
+    ) -> _SearchResponse:
+        return _SearchResponse(
+            [
+                _SearchResult(
+                    document_id=document_ids[0],
+                    page_content="The runbook keeps the rollback window under approval control.",
+                    metadata={"user_id": "user-alpha", "type": "txt"},
+                )
+            ]
+        )
 
 
 class FakeOpenSearchHelper:
@@ -54,6 +96,30 @@ class FakeOpenSearchHelper:
         poll_interval_seconds: float = 1.0,
     ) -> None:
         self.absent_waits.append(document_id)
+
+    def cleanup_document(self, document_id: str) -> None:
+        raise AssertionError("fallback cleanup should not be used in this scenario")
+
+
+class SuccessfulOpenSearchHelper:
+    def wait_until_document_present(
+        self,
+        document_id: str,
+        *,
+        min_chunks: int = 1,
+        timeout_seconds: float = 30.0,
+        poll_interval_seconds: float = 1.0,
+    ) -> int:
+        return 1
+
+    def wait_until_document_absent(
+        self,
+        document_id: str,
+        *,
+        timeout_seconds: float = 30.0,
+        poll_interval_seconds: float = 1.0,
+    ) -> None:
+        return None
 
     def cleanup_document(self, document_id: str) -> None:
         raise AssertionError("fallback cleanup should not be used in this scenario")
@@ -231,3 +297,67 @@ def test_cleanup_failure_can_be_reported_as_warning_without_failing_run(
     assert "RAG_SENTINEL_FAIL_ON_CLEANUP_ERROR=false" in payload["cleanup_warning"]
     assert payload["cleanup_results"][0]["cleanup_status"] == "failed"
     assert payload["cleanup_results"][0]["cleanup_errors"]
+
+
+def test_summary_json_includes_metrics_after_retrieval_flow_execution(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: SentinelSettings,
+) -> None:
+    monkeypatch.setattr(
+        retrieval_flow_module,
+        "unique_document_id",
+        lambda namespace, slug: f"{namespace}-{slug}",
+    )
+
+    executor = RetrievalFlowExecutor(
+        settings=settings,
+        rag_client=SearchableFakeRagClient(),
+        opensearch_helper=SuccessfulOpenSearchHelper(),
+        artifact_writer=ArtifactWriter(settings),
+    )
+    dataset = RetrievalDataset.model_validate(
+        {
+            "dataset_id": "metrics-summary",
+            "description": "metrics summary regression",
+            "documents": [
+                {
+                    "key": "doc_runbook",
+                    "content": "Rollback window approval runbook.",
+                    "metadata": {"user_id": "user-alpha", "type": "txt"},
+                    "min_expected_chunks": 1,
+                }
+            ],
+            "queries": [
+                {
+                    "query_id": "q_runbook",
+                    "query": "What does the runbook say about rollback?",
+                    "alpha": 0.5,
+                    "expectations": {
+                        "expected_top1": "doc_runbook",
+                        "expected_in_topk": ["doc_runbook"],
+                        "expected_top1_chunk_contains": ["rollback window", "approval"],
+                        "forbidden_chunk_contains": ["deprecated procedure"],
+                    },
+                }
+            ],
+        }
+    )
+
+    summary = executor.run_dataset(dataset)
+
+    summary_path = Path(summary.run_dir) / "summary.json"
+    payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    metrics = payload["metrics"]
+    assert metrics["total_queries"] == 1
+    assert metrics["passed_queries"] == 1
+    assert metrics["failed_queries"] == 0
+    assert metrics["query_pass_rate"] == 1.0
+    assert metrics["top1_document_accuracy"] == 1.0
+    assert metrics["document_hit_rate_at_k"] == 1.0
+    assert metrics["top1_chunk_match_rate"] == 1.0
+    assert metrics["forbidden_chunk_violation_rate"] == 0.0
+    assert metrics["total_run_ms"] >= 0.0
+    assert metrics["seed_total_ms"] >= 0.0
+    assert metrics["search_total_ms"] >= 0.0
+    assert metrics["cleanup_total_ms"] >= 0.0
+    assert summary.metrics == metrics

@@ -19,6 +19,11 @@ from pitchavatar_rag_sentinel.evaluators.retrieval import (
     evaluate_retrieval_query,
 )
 from pitchavatar_rag_sentinel.reporting.artifacts import ArtifactWriter
+from pitchavatar_rag_sentinel.reporting.metrics import (
+    Metrics,
+    RetrievalRunTimings,
+    calculate_retrieval_metrics,
+)
 from pitchavatar_rag_sentinel.utils.assertions import unique_document_ids
 from pitchavatar_rag_sentinel.utils.naming import unique_document_id
 
@@ -70,6 +75,7 @@ class DatasetRunSummary:
     seeded_documents: dict[str, SeededDocumentState]
     query_results: list[QueryExecutionResult]
     cleanup_results: list[CleanupResult]
+    metrics: Metrics
     run_dir: str
     run_error: str | None = None
 
@@ -97,6 +103,7 @@ class DatasetRunSummary:
                 for result in self.query_results
             ],
             "cleanup_results": [asdict(result) for result in self.cleanup_results],
+            "metrics": self.metrics,
             "run_dir": self.run_dir,
             "run_error": self.run_error,
         }
@@ -116,6 +123,7 @@ class RetrievalFlowExecutor:
         self._artifacts = artifact_writer
 
     def run_dataset(self, dataset: RetrievalDataset) -> DatasetRunSummary:
+        run_start = time.perf_counter()
         run_id = unique_document_id(self._settings.namespace, dataset.dataset_id)
         run_dir = self._artifacts.prepare_run_dir(run_id, dataset.dataset_id)
         seeded_documents: dict[str, SeededDocumentState] = {}
@@ -123,9 +131,15 @@ class RetrievalFlowExecutor:
         cleanup_results: list[CleanupResult] = []
         run_error: str | None = None
         original_error: Exception | None = None
+        seed_total_ms = 0.0
+        cleanup_total_ms = 0.0
 
         try:
-            self._seed_documents(dataset, run_dir, seeded_documents)
+            seed_start = time.perf_counter()
+            try:
+                self._seed_documents(dataset, run_dir, seeded_documents)
+            finally:
+                seed_total_ms += self._elapsed_ms(seed_start)
             for query_case in dataset.queries:
                 query_results.append(
                     self._execute_query(
@@ -140,6 +154,7 @@ class RetrievalFlowExecutor:
             original_error = exc
         finally:
             if seeded_documents:
+                cleanup_start = time.perf_counter()
                 try:
                     cleanup_results = self._cleanup_seeded_documents(list(seeded_documents.values()))
                 except Exception as exc:  # noqa: BLE001
@@ -159,12 +174,23 @@ class RetrievalFlowExecutor:
                             error=cleanup_error["error_repr"],
                         )
                     ]
+                finally:
+                    cleanup_total_ms += self._elapsed_ms(cleanup_start)
 
         all_queries_passed = run_error is None and all(result.passed for result in query_results)
         cleanup_failed = any(not result.cleanup_verified for result in cleanup_results)
         cleanup_warning = self._cleanup_warning(cleanup_failed)
         run_passed = all_queries_passed and (
             not cleanup_failed or not self._settings.fail_on_cleanup_error
+        )
+        metrics = calculate_retrieval_metrics(
+            [result.evaluation for result in query_results],
+            timings=RetrievalRunTimings(
+                total_run_ms=self._elapsed_ms(run_start),
+                seed_total_ms=seed_total_ms,
+                search_latencies_ms=[result.latency_ms for result in query_results],
+                cleanup_total_ms=cleanup_total_ms,
+            ),
         )
 
         summary = DatasetRunSummary(
@@ -177,6 +203,7 @@ class RetrievalFlowExecutor:
             seeded_documents=seeded_documents,
             query_results=query_results,
             cleanup_results=cleanup_results,
+            metrics=metrics,
             run_dir=str(run_dir),
             run_error=run_error,
         )
@@ -199,6 +226,10 @@ class RetrievalFlowExecutor:
             "Cleanup failed but RAG_SENTINEL_FAIL_ON_CLEANUP_ERROR=false, "
             "so retrieval results are preserved and the cleanup failure is reported as a warning."
         )
+
+    @staticmethod
+    def _elapsed_ms(start: float) -> float:
+        return round((time.perf_counter() - start) * 1000, 3)
 
     def _seed_documents(
         self,

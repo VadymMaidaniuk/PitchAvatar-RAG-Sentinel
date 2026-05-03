@@ -251,10 +251,30 @@ Artifacts contain:
 - seeded runtime document ids
 - cleanup status
 - cleanup warnings and structured cleanup errors when cleanup fails
+- deterministic aggregate metrics in `summary.json`
 
 By default `RAG_SENTINEL_FAIL_ON_CLEANUP_ERROR=true`, so a final cleanup failure makes the
 overall run fail after `summary.json` is written. Set it to `false` only when you want retrieval
 results to pass while cleanup failures are preserved as warnings in the summary artifact.
+
+## Current metrics
+
+`summary.json` includes a `metrics` object with deterministic QA regression metrics calculated
+from explicit retrieval expectations and their check results. These metrics cover query pass rate,
+document top-1 accuracy, document hit rate at k, forbidden document violations, empty-query checks,
+chunk top-1 match rate, chunk hit rate at k, forbidden chunk violations, and basic run/search
+timings when a real run executes.
+
+These are not `pytrec_eval` metrics yet, not Ragas metrics yet, and not LLM-as-judge scores. They
+are intended for regression reporting now and future dashboard visualization later. Rates are
+reported as floats from `0.0` to `1.0`; when no explicit checks apply, the corresponding rate is
+`null`.
+
+Status fields differ intentionally:
+
+- `all_queries_passed`: retrieval expectations only.
+- `run_passed`: final run status, including cleanup policy.
+- `metrics.query_pass_rate`: aggregate ratio of passed query evaluations to total query evaluations.
 
 ## Current scope
 

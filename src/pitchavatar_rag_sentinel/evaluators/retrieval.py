@@ -15,6 +15,7 @@ class CheckResult:
     matched_result_index: int | None = None
     matched_document_id: str | None = None
     failure_reason: str | None = None
+    applicable: bool = True
 
 
 @dataclass(slots=True)
@@ -95,6 +96,7 @@ def evaluate_retrieval_query(
             name="expected_in_topk",
             passed=not missing_expected,
             details=f"missing_expected={missing_expected}",
+            applicable=bool(expected_runtime_ids),
         )
     )
 
@@ -105,6 +107,7 @@ def evaluate_retrieval_query(
             name="forbidden_docs_absent",
             passed=not unexpected_forbidden,
             details=f"forbidden_present={unexpected_forbidden}",
+            applicable=bool(forbidden_runtime_ids),
         )
     )
 
