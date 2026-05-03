@@ -62,6 +62,7 @@ class QueryArtifactReport:
     response: dict[str, Any]
     evaluation: dict[str, Any]
     artifact_path: str | None = None
+    raw_artifact: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -264,6 +265,7 @@ def _build_query_report(
         response=response,
         evaluation=evaluation,
         artifact_path=_optional_str(artifact_path_text),
+        raw_artifact=artifact_payload,
     )
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from pitchavatar_rag_sentinel.reporting.artifacts import (
@@ -36,9 +37,13 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    artifact_dir = find_latest_artifact_dir(args.artifacts_root) if args.latest else args.run_dir
-    report = load_artifact_report(artifact_dir)
-    output_path = write_html_report(report)
+    try:
+        artifact_dir = find_latest_artifact_dir(args.artifacts_root) if args.latest else args.run_dir
+        report = load_artifact_report(artifact_dir)
+        output_path = write_html_report(report)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"Report generation failed: {exc}", file=sys.stderr)
+        return 1
     print(output_path)
     return 0
 

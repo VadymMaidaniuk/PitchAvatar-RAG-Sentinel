@@ -53,6 +53,12 @@ Important on Windows:
 - the safe form is `.venv\Scripts\python -m pytest ...`
 - otherwise PowerShell may pick the global `pytest.exe`
 
+Install optional UI dependencies when you want the local artifact console:
+
+```powershell
+.venv\Scripts\python -m pip install -e ".[dev,report,ui]"
+```
+
 ## Preflight
 
 Before the first real run:
@@ -235,6 +241,18 @@ Generate a report for the newest artifact directory under `artifacts/runs`:
 .venv\Scripts\python scripts\generate_report.py --latest
 ```
 
+Launch the read-only Streamlit console for local artifacts:
+
+```powershell
+streamlit run apps/sentinel_console.py
+```
+
+or without activating the virtual environment:
+
+```powershell
+.venv\Scripts\streamlit.exe run apps\sentinel_console.py
+```
+
 Run the gRPC-only smoke suite:
 
 ```powershell
@@ -276,12 +294,16 @@ results to pass while cleanup failures are preserved as warnings in the summary 
 directory. It is read-only: it loads `summary.json` and `queries/*.json`, then renders run status,
 metrics, timing metrics, failed query details, all query results, and cleanup warnings/errors.
 
+`apps/sentinel_console.py` provides a read-only Streamlit console over the same local artifacts.
+It lets QA select an artifact root, run, and dataset, then browse summary fields, metrics, timing
+metrics, failed queries, all queries, query detail JSON, and cleanup details.
+
 The report viewer does not start real RAG runs, does not call gRPC or OpenSearch, and does not
 perform cleanup or any destructive action. It is intended for sharing and inspecting already
 captured QA artifacts.
 
-Future reporting work can build on the same loader for a Streamlit console, trend dashboard, and
-dataset builder.
+Future reporting work can build on the same loader for a trend dashboard, dataset builder, and
+real run launcher with explicit safety controls.
 
 ## Current metrics
 

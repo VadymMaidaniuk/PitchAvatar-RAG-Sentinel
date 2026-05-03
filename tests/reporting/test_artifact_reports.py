@@ -197,6 +197,26 @@ def test_missing_optional_fields_do_not_crash_report_generator(tmp_path: Path) -
     assert "No retrieval metrics" in report_path.read_text(encoding="utf-8")
 
 
+def test_report_generator_latest_fails_cleanly_when_no_artifacts_exist(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    empty_root = tmp_path / "empty-artifacts"
+    empty_root.mkdir()
+    monkeypatch.setattr(
+        "sys.argv",
+        ["generate_report.py", "--latest", "--artifacts-root", str(empty_root)],
+    )
+
+    assert generate_report.main() == 1
+
+    captured = capsys.readouterr()
+    assert "Report generation failed:" in captured.err
+    assert "No artifact summaries found" in captured.err
+    assert "Traceback" not in captured.err
+
+
 def test_report_includes_run_passed_query_pass_rate_and_failed_query_id(
     tmp_path: Path,
 ) -> None:

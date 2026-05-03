@@ -114,18 +114,16 @@ def _render_metric_table(
     empty_text: str,
     unit: str | None = None,
 ) -> str:
-    available_metric_names = [name for name in metric_names if name in metrics]
-    if not available_metric_names:
-        body = f"<p>{_html(empty_text)}</p>"
-    else:
-        rows = "\n".join(
-            "<tr>"
-            f"<th><code>{_html(name)}</code></th>"
-            f"<td>{_html(_format_metric(metrics.get(name), unit=unit))}</td>"
-            "</tr>"
-            for name in available_metric_names
-        )
-        body = f"""
+    rows = "\n".join(
+        "<tr>"
+        f"<th><code>{_html(name)}</code></th>"
+        f"<td>{_html(_format_metric(metrics.get(name), unit=unit))}</td>"
+        "</tr>"
+        for name in metric_names
+    )
+    missing_note = f"<p>{_html(empty_text)}</p>" if not any(name in metrics for name in metric_names) else ""
+    body = f"""
+{missing_note}
 <table>
   <tbody>
     {rows}
