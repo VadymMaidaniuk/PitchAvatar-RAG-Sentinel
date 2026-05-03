@@ -222,6 +222,19 @@ Validate a dataset run plan without gRPC/OpenSearch calls:
 .venv\Scripts\python scripts\run_dataset.py datasets\retrieval\quantum_baseline.json --dry-run
 ```
 
+Generate a read-only HTML report from existing artifacts:
+
+```powershell
+.venv\Scripts\python scripts\generate_report.py --run-dir artifacts\runs\<run-id>\<dataset-id>
+Invoke-Item artifacts\runs\<run-id>\<dataset-id>\report.html
+```
+
+Generate a report for the newest artifact directory under `artifacts/runs`:
+
+```powershell
+.venv\Scripts\python scripts\generate_report.py --latest
+```
+
 Run the gRPC-only smoke suite:
 
 ```powershell
@@ -256,6 +269,19 @@ Artifacts contain:
 By default `RAG_SENTINEL_FAIL_ON_CLEANUP_ERROR=true`, so a final cleanup failure makes the
 overall run fail after `summary.json` is written. Set it to `false` only when you want retrieval
 results to pass while cleanup failures are preserved as warnings in the summary artifact.
+
+## Artifact reports
+
+`scripts/generate_report.py` builds a static `report.html` inside an existing dataset artifact
+directory. It is read-only: it loads `summary.json` and `queries/*.json`, then renders run status,
+metrics, timing metrics, failed query details, all query results, and cleanup warnings/errors.
+
+The report viewer does not start real RAG runs, does not call gRPC or OpenSearch, and does not
+perform cleanup or any destructive action. It is intended for sharing and inspecting already
+captured QA artifacts.
+
+Future reporting work can build on the same loader for a Streamlit console, trend dashboard, and
+dataset builder.
 
 ## Current metrics
 
