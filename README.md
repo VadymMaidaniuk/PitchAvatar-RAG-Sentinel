@@ -189,6 +189,7 @@ Example dataset:
 Dataset strategy and categories:
 
 - [docs/datasets.md](C:/Projects/PitchAvatar-RAG-Sentinel/docs/datasets.md)
+- [docs/dataset_builder.md](C:/Projects/PitchAvatar-RAG-Sentinel/docs/dataset_builder.md)
 - [docs/smoke_calibration_report.md](C:/Projects/PitchAvatar-RAG-Sentinel/docs/smoke_calibration_report.md)
 
 ## Commands
@@ -227,6 +228,12 @@ Validate a dataset run plan without gRPC/OpenSearch calls:
 
 ```powershell
 .venv\Scripts\python scripts\run_dataset.py datasets\retrieval\quantum_baseline.json --dry-run
+```
+
+Preview local `.txt` or `.md` source sections for a draft dataset:
+
+```powershell
+.venv\Scripts\python scripts\preview_dataset_source.py path\to\source.md
 ```
 
 Generate a read-only HTML report from existing artifacts:

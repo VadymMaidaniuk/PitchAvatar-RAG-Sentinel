@@ -1,9 +1,18 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
+from pitchavatar_rag_sentinel.dataset_builder.drafts import (
+    ExpectationDraft,
+    QueryDraft,
+    build_retrieval_dataset,
+    dataset_to_pretty_json,
+    make_document_key,
+)
+from pitchavatar_rag_sentinel.dataset_builder.parsers import parse_source_text
 from pitchavatar_rag_sentinel.reporting.artifacts import (
     ArtifactDatasetRef,
     ArtifactLoader,
@@ -119,8 +128,19 @@ def main() -> None:
 
     st.set_page_config(page_title="RAG Sentinel Console", layout="wide")
     st.title("RAG Sentinel Console")
-    st.caption("Read-only local artifact viewer. No RAG runs or cleanup actions are available here.")
+    st.caption(
+        "Read-only local artifact viewer and offline dataset draft builder. "
+        "No RAG runs or cleanup actions are available here."
+    )
 
+    artifact_tab, dataset_builder_tab = st.tabs(["Artifacts", "Dataset Builder"])
+    with artifact_tab:
+        _render_artifact_console(st)
+    with dataset_builder_tab:
+        _render_dataset_builder(st)
+
+
+def _render_artifact_console(st: Any) -> None:
     artifacts_root_text = st.sidebar.text_input("Artifacts root", value="artifacts/runs")
     artifacts_root = Path(artifacts_root_text)
     if not artifacts_root.exists():
@@ -154,6 +174,149 @@ def main() -> None:
 
     report = loader.load_report(selected_dataset.path)
     _render_report(st, report, selected_run, selected_dataset)
+
+
+def _render_dataset_builder(st: Any) -> None:
+    uploaded_file = st.file_uploader("Source file", type=["txt", "md"])
+    if uploaded_file is None:
+        st.info("Upload a .txt or .md file to preview local sections.")
+        return
+
+    source_text = uploaded_file.getvalue().decode("utf-8", errors="replace")
+    try:
+        parsed_source = parse_source_text(source_text, source_file_name=uploaded_file.name)
+    except ValueError as exc:
+        st.error(str(exc))
+        return
+
+    st.metric("Extracted characters", len(parsed_source.extracted_text))
+    st.metric("Sections", len(parsed_source.sections))
+
+    section_rows = [
+        {
+            "document_key": make_document_key(parsed_source.source_file_name, section),
+            "section_id": section.section_id,
+            "title": section.title,
+            "characters": section.character_count,
+            "preview": _preview_text(section.text, 180),
+        }
+        for section in parsed_source.sections
+    ]
+    if section_rows:
+        st.dataframe(section_rows, hide_index=True, use_container_width=True)
+    else:
+        st.warning("No text sections were extracted from this file.")
+
+    default_dataset_id = f"{_slugify(Path(uploaded_file.name).stem) or 'dataset'}_draft"
+    dataset_id = st.text_input("dataset_id", value=default_dataset_id)
+    query_count = st.number_input("Query drafts", min_value=1, max_value=5, value=1, step=1)
+    document_keys = [row["document_key"] for row in section_rows]
+    document_options = ["", *document_keys]
+    query_drafts: list[QueryDraft] = []
+
+    for index in range(int(query_count)):
+        with st.expander(f"Query {index + 1}", expanded=index == 0):
+            query_id = st.text_input("query_id", key=f"builder_query_id_{index}")
+            query = st.text_area("query", key=f"builder_query_{index}", height=80)
+            alpha = st.selectbox(
+                "alpha",
+                options=[0.5, 0.0, 1.0],
+                key=f"builder_alpha_{index}",
+            )
+            top_k = st.number_input(
+                "top_k",
+                min_value=1,
+                max_value=50,
+                value=10,
+                step=1,
+                key=f"builder_top_k_{index}",
+            )
+            threshold = st.number_input(
+                "threshold",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.3,
+                step=0.05,
+                key=f"builder_threshold_{index}",
+            )
+            expected_top1 = st.selectbox(
+                "expected_top1",
+                options=document_options,
+                format_func=lambda value: value or "none",
+                key=f"builder_expected_top1_{index}",
+            )
+            expected_in_topk = st.multiselect(
+                "expected_in_topk",
+                options=document_keys,
+                default=[expected_top1] if expected_top1 else [],
+                key=f"builder_expected_in_topk_{index}",
+            )
+            forbidden_docs = st.multiselect(
+                "forbidden_docs",
+                options=document_keys,
+                key=f"builder_forbidden_docs_{index}",
+            )
+            document_scope = st.multiselect(
+                "document_scope",
+                options=document_keys,
+                help="Leave empty to use all generated documents.",
+                key=f"builder_document_scope_{index}",
+            )
+            expected_top1_fragments = st.text_area(
+                "expected_top1_chunk_contains",
+                help="One manually selected fragment per line.",
+                key=f"builder_expected_top1_fragments_{index}",
+            )
+            expected_in_topk_fragments = st.text_area(
+                "expected_in_topk_chunk_contains",
+                help="One manually selected fragment per line.",
+                key=f"builder_expected_in_topk_fragments_{index}",
+            )
+            expect_empty = st.checkbox("expect_empty", key=f"builder_expect_empty_{index}")
+
+        if query.strip():
+            query_drafts.append(
+                QueryDraft(
+                    query=query,
+                    query_id=query_id.strip() or None,
+                    alpha=alpha,
+                    top_k=int(top_k),
+                    threshold=float(threshold),
+                    document_scope=document_scope or "all",
+                    expectations=ExpectationDraft(
+                        expected_top1=expected_top1 or None,
+                        expected_in_topk=expected_in_topk,
+                        forbidden_docs=forbidden_docs,
+                        expected_top1_chunk_contains=_lines(expected_top1_fragments),
+                        expected_in_topk_chunk_contains=_lines(expected_in_topk_fragments),
+                        min_results=0 if expect_empty else 1,
+                        expect_empty=expect_empty,
+                    ),
+                )
+            )
+
+    if not dataset_id.strip():
+        st.warning("dataset_id is required before JSON can be generated.")
+        return
+
+    try:
+        dataset = build_retrieval_dataset(
+            dataset_id=dataset_id.strip(),
+            parsed_source=parsed_source,
+            query_drafts=query_drafts,
+        )
+    except ValueError as exc:
+        st.error(str(exc))
+        return
+
+    dataset_json = dataset_to_pretty_json(dataset)
+    st.code(dataset_json, language="json")
+    st.download_button(
+        "Download dataset JSON",
+        data=dataset_json,
+        file_name=f"{dataset.dataset_id}.json",
+        mime="application/json",
+    )
 
 
 def _render_report(
@@ -286,6 +449,21 @@ def _optional_str(value: Any) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _lines(value: str) -> list[str]:
+    return [line.strip() for line in value.splitlines() if line.strip()]
+
+
+def _preview_text(value: str, limit: int) -> str:
+    if len(value) <= limit:
+        return value
+    return f"{value[: max(0, limit - 3)].rstrip()}..."
+
+
+def _slugify(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", value.casefold()).strip("_")
+    return re.sub(r"_+", "_", slug)[:64].strip("_")
 
 
 def _compact_json(value: Any) -> str:
