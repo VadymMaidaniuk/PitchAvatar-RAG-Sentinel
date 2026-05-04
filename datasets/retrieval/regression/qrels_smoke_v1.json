@@ -1,0 +1,124 @@
+{
+  "dataset_id": "qrels_smoke_v1",
+  "description": "Small regression corpus for document-level qrels and classic IR metrics.",
+  "documents": [
+    {
+      "key": "doc_upload_limits",
+      "content": "PitchAvatar upload limits: PDF uploads support documents up to 50 MB. Large presentation uploads are converted into searchable slide text. ZIP archives are not accepted for the knowledge base.",
+      "metadata": {
+        "user_id": "qa-qrels",
+        "type": "policy",
+        "topic": "upload_limits"
+      },
+      "min_expected_chunks": 1
+    },
+    {
+      "key": "doc_general_upload",
+      "content": "Upload workspace guide: add files from the Documents page to make them available for RAG search. Supported source formats include PDF, PPTX, TXT, and Markdown.",
+      "metadata": {
+        "user_id": "qa-qrels",
+        "type": "guide",
+        "topic": "uploads"
+      },
+      "min_expected_chunks": 1
+    },
+    {
+      "key": "doc_avatar_sharing",
+      "content": "Avatar sharing permissions: workspace owners can share an avatar with teammates, revoke access, and audit who can present with that avatar.",
+      "metadata": {
+        "user_id": "qa-qrels",
+        "type": "guide",
+        "topic": "sharing"
+      },
+      "min_expected_chunks": 1
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "q_pdf_upload_limit",
+      "query": "maximum PDF upload size",
+      "alpha": 0.5,
+      "top_k": 5,
+      "threshold": 0.0,
+      "document_scope": "all",
+      "expectations": {
+        "expected_top1": "doc_upload_limits",
+        "expected_in_topk": [
+          "doc_upload_limits"
+        ],
+        "expected_top1_chunk_contains": [
+          "PDF uploads support documents up to 50 MB"
+        ],
+        "min_results": 1
+      },
+      "qrels": [
+        {
+          "document_key": "doc_upload_limits",
+          "relevance": 2
+        },
+        {
+          "document_key": "doc_general_upload",
+          "relevance": 1
+        }
+      ]
+    },
+    {
+      "query_id": "q_supported_upload_formats",
+      "query": "which file types can I upload to the knowledge base",
+      "alpha": 0.5,
+      "top_k": 5,
+      "threshold": 0.0,
+      "document_scope": "all",
+      "expectations": {
+        "expected_top1": "doc_general_upload",
+        "expected_in_topk": [
+          "doc_general_upload",
+          "doc_upload_limits"
+        ],
+        "expected_in_topk_chunk_contains": [
+          "PDF, PPTX, TXT, and Markdown"
+        ],
+        "min_results": 1
+      },
+      "qrels": [
+        {
+          "document_key": "doc_general_upload",
+          "relevance": 2
+        },
+        {
+          "document_key": "doc_upload_limits",
+          "relevance": 1
+        }
+      ]
+    },
+    {
+      "query_id": "q_avatar_permissions",
+      "query": "avatar sharing permissions and revoke access",
+      "alpha": 0.5,
+      "top_k": 5,
+      "threshold": 0.0,
+      "document_scope": "all",
+      "expectations": {
+        "expected_top1": "doc_avatar_sharing",
+        "expected_in_topk": [
+          "doc_avatar_sharing"
+        ],
+        "expected_top1_chunk_contains": [
+          "workspace owners can share an avatar",
+          "revoke access"
+        ],
+        "min_results": 1
+      },
+      "qrels": [
+        {
+          "document_key": "doc_avatar_sharing",
+          "relevance": 2
+        },
+        {
+          "document_key": "doc_general_upload",
+          "relevance": 0
+        }
+      ]
+    }
+  ]
+}

@@ -28,6 +28,12 @@ RUN_HISTORY_METRIC_NAMES = (
     "total_run_ms",
     "p95_search_ms",
 )
+RUN_HISTORY_IR_METRIC_NAMES = (
+    "hit_rate_at_5",
+    "recall_at_5",
+    "mrr",
+    "ndcg_at_10",
+)
 
 
 class ArtifactWriter:
@@ -87,6 +93,7 @@ class ArtifactRunReport:
     cleanup_failed: bool | None
     cleanup_warning: str | None
     metrics: dict[str, Any]
+    ir_metrics: dict[str, Any]
     timings: dict[str, Any]
     query_results: list[QueryArtifactReport]
     failed_query_results: list[QueryArtifactReport]
@@ -111,6 +118,10 @@ class ArtifactRunHistoryRow:
     chunk_hit_rate_at_k: float | None
     forbidden_doc_violation_rate: float | None
     forbidden_chunk_violation_rate: float | None
+    hit_rate_at_5: float | None
+    recall_at_5: float | None
+    mrr: float | None
+    ndcg_at_10: float | None
     total_run_ms: float | None
     p95_search_ms: float | None
     failed_queries: int
@@ -251,6 +262,7 @@ def load_run_history_row(artifact_dir: Path | str) -> ArtifactRunHistoryRow:
     path = Path(artifact_dir)
     summary = load_summary(path)
     metrics = _as_dict(summary.get("metrics"))
+    ir_metrics = _as_dict(summary.get("ir_metrics"))
     query_results = _list_of_dicts(summary.get("query_results"))
     run_id = str(summary.get("run_id") or path.parent.name)
     dataset_id = str(summary.get("dataset_id") or path.name)
@@ -276,6 +288,10 @@ def load_run_history_row(artifact_dir: Path | str) -> ArtifactRunHistoryRow:
         forbidden_chunk_violation_rate=_optional_float(
             metrics.get("forbidden_chunk_violation_rate")
         ),
+        hit_rate_at_5=_optional_float(ir_metrics.get("hit_rate_at_5")),
+        recall_at_5=_optional_float(ir_metrics.get("recall_at_5")),
+        mrr=_optional_float(ir_metrics.get("mrr")),
+        ndcg_at_10=_optional_float(ir_metrics.get("ndcg_at_10")),
         total_run_ms=_optional_float(metrics.get("total_run_ms")),
         p95_search_ms=_optional_float(metrics.get("p95_search_ms")),
         failed_queries=sum(1 for result in query_results if result.get("passed") is False),
@@ -300,6 +316,7 @@ def load_artifact_report(artifact_dir: Path | str) -> ArtifactRunReport:
     query_payloads = _load_query_payloads(path)
     query_results = _build_query_reports(summary, query_payloads)
     metrics = _as_dict(summary.get("metrics"))
+    ir_metrics = _as_dict(summary.get("ir_metrics"))
     failed_query_results = [result for result in query_results if not result.passed]
 
     return ArtifactRunReport(
@@ -311,6 +328,7 @@ def load_artifact_report(artifact_dir: Path | str) -> ArtifactRunReport:
         cleanup_failed=_optional_bool(summary.get("cleanup_failed")),
         cleanup_warning=_optional_str(summary.get("cleanup_warning")),
         metrics=metrics,
+        ir_metrics=ir_metrics,
         timings={name: metrics.get(name) for name in TIMING_METRIC_NAMES if name in metrics},
         query_results=query_results,
         failed_query_results=failed_query_results,

@@ -36,6 +36,8 @@ The original root-level datasets remain supported:
   stable smoke.
 - `diagnostics/alpha_matrix_v1.json`: reproduces current alpha-mode behavior while backend
   `SearchWithThreshold` semantics are clarified.
+- `regression/qrels_smoke_v1.json`: small document-level qrels corpus for classic IR metric
+  plumbing.
 
 Smoke datasets are stable health checks. They should verify that seed, search, deterministic
 evaluation, artifact writing, and cleanup work without depending on unresolved backend semantics.
@@ -66,6 +68,9 @@ Chunk-level checks:
 
 Chunk checks are deterministic substring checks, not semantic or LLM evaluation. Matching is
 case-insensitive and normalizes whitespace. Choose fragments that are short, unique, and stable.
+
+Queries may also include optional document-level `qrels` for relevance-label based IR metrics.
+Qrels are additive and do not replace expectation checks. See [ir_metrics.md](ir_metrics.md).
 
 Example:
 

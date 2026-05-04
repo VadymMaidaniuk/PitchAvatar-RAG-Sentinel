@@ -13,6 +13,12 @@ from pitchavatar_rag_sentinel.clients.opensearch_helper import OpenSearchHelper
 from pitchavatar_rag_sentinel.clients.rag_client import RagServiceClient
 from pitchavatar_rag_sentinel.config import SentinelSettings
 from pitchavatar_rag_sentinel.datasets.models import QueryCaseSpec, RetrievalDataset
+from pitchavatar_rag_sentinel.evaluators.ir_metrics import (
+    IrMetrics,
+    IrQueryEvaluation,
+    calculate_query_ir_metrics,
+    calculate_summary_ir_metrics,
+)
 from pitchavatar_rag_sentinel.evaluators.retrieval import (
     RetrievedChunk,
     RetrievalEvaluationResult,
@@ -45,6 +51,7 @@ class QueryExecutionResult:
     passed: bool
     latency_ms: float
     evaluation: RetrievalEvaluationResult
+    ir_evaluation: IrQueryEvaluation | None
     request: dict
     response: dict
     artifact_path: str
@@ -76,6 +83,7 @@ class DatasetRunSummary:
     query_results: list[QueryExecutionResult]
     cleanup_results: list[CleanupResult]
     metrics: Metrics
+    ir_metrics: IrMetrics | None
     run_dir: str
     run_error: str | None = None
 
@@ -91,22 +99,30 @@ class DatasetRunSummary:
                 key: asdict(state) for key, state in self.seeded_documents.items()
             },
             "query_results": [
-                {
-                    "query_id": result.query_id,
-                    "passed": result.passed,
-                    "latency_ms": result.latency_ms,
-                    "evaluation": result.evaluation.to_dict(),
-                    "request": result.request,
-                    "response": result.response,
-                    "artifact_path": result.artifact_path,
-                }
+                self._query_result_to_dict(result)
                 for result in self.query_results
             ],
             "cleanup_results": [asdict(result) for result in self.cleanup_results],
             "metrics": self.metrics,
+            "ir_metrics": self.ir_metrics,
             "run_dir": self.run_dir,
             "run_error": self.run_error,
         }
+
+    @staticmethod
+    def _query_result_to_dict(result: QueryExecutionResult) -> dict:
+        payload = {
+            "query_id": result.query_id,
+            "passed": result.passed,
+            "latency_ms": result.latency_ms,
+            "evaluation": result.evaluation.to_dict(),
+            "request": result.request,
+            "response": result.response,
+            "artifact_path": result.artifact_path,
+        }
+        if result.ir_evaluation is not None:
+            payload["ir_evaluation"] = result.ir_evaluation
+        return payload
 
 
 class RetrievalFlowExecutor:
@@ -192,6 +208,9 @@ class RetrievalFlowExecutor:
                 cleanup_total_ms=cleanup_total_ms,
             ),
         )
+        ir_metrics = calculate_summary_ir_metrics(
+            result.ir_evaluation for result in query_results
+        )
 
         summary = DatasetRunSummary(
             dataset_id=dataset.dataset_id,
@@ -204,6 +223,7 @@ class RetrievalFlowExecutor:
             query_results=query_results,
             cleanup_results=cleanup_results,
             metrics=metrics,
+            ir_metrics=ir_metrics,
             run_dir=str(run_dir),
             run_error=run_error,
         )
@@ -345,6 +365,7 @@ class RetrievalFlowExecutor:
                 for result in response.results
             ]
         }
+        raw_returned_document_ids = [result.document_id for result in response.results]
         returned_document_ids = unique_document_ids(response.results)
         evaluation = evaluate_retrieval_query(
             query_case=query_case,
@@ -358,17 +379,26 @@ class RetrievalFlowExecutor:
                 for result in response.results
             ],
         )
+        ir_evaluation = calculate_query_ir_metrics(
+            query_case=query_case,
+            retrieved_document_ids=raw_returned_document_ids,
+            key_to_runtime_id=key_to_runtime_id,
+        )
+
+        query_artifact = {
+            "dataset_id": dataset.dataset_id,
+            "query_id": query_case.query_id,
+            "latency_ms": latency_ms,
+            "request": request_payload,
+            "response": response_payload,
+            "evaluation": evaluation.to_dict(),
+        }
+        if ir_evaluation is not None:
+            query_artifact["ir_evaluation"] = ir_evaluation
 
         artifact_path = self._artifacts.write_json(
             run_dir / "queries" / f"{query_case.query_id}.json",
-            {
-                "dataset_id": dataset.dataset_id,
-                "query_id": query_case.query_id,
-                "latency_ms": latency_ms,
-                "request": request_payload,
-                "response": response_payload,
-                "evaluation": evaluation.to_dict(),
-            },
+            query_artifact,
         )
 
         return QueryExecutionResult(
@@ -376,6 +406,7 @@ class RetrievalFlowExecutor:
             passed=evaluation.passed,
             latency_ms=latency_ms,
             evaluation=evaluation,
+            ir_evaluation=ir_evaluation,
             request=request_payload,
             response=response_payload,
             artifact_path=str(artifact_path),

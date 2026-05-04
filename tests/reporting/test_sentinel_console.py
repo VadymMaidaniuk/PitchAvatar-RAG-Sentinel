@@ -12,6 +12,7 @@ from apps.sentinel_console import (
     failed_check_names,
     failed_query_rows,
     format_metric_value,
+    ir_metric_rows,
     metric_rows,
     query_detail_payload,
     sort_runs_latest_first,
@@ -46,6 +47,14 @@ def write_console_artifacts(tmp_path: Path) -> Path:
                 "query_pass_rate": 0.5,
                 "top1_document_accuracy": None,
                 "total_run_ms": 12.3,
+            },
+            "ir_metrics": {
+                "queries_with_qrels": 1,
+                "hit_rate_at_5": 1.0,
+                "recall_at_5": 1.0,
+                "precision_at_5": 0.2,
+                "mrr": 1.0,
+                "ndcg_at_10": 1.0,
             },
             "query_results": [
                 {"query_id": "q_pass", "passed": True},
@@ -175,6 +184,8 @@ def test_console_table_rows_are_derived_from_loaded_report(tmp_path: Path) -> No
         {"metric": "query_pass_rate", "value": "0.5"},
         {"metric": "top1_document_accuracy", "value": "n/a"},
     ]
+    assert {"metric": "hit_rate_at_5", "value": "1"} in ir_metric_rows(report)
+    assert {"metric": "mrr", "value": "1"} in ir_metric_rows(report)
     assert all_query_rows(report) == [
         {
             "query_id": "q_pass",

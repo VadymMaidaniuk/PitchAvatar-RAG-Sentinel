@@ -37,7 +37,8 @@ Use `--output` and `--csv-output` to choose different paths.
 
 The trends report includes overall run count, datasets covered, latest status per dataset, all runs
 sorted latest-first, pass/fail status, failed query counts, retrieval metrics, timing metrics, and
-links to per-run `report.html` when that file exists.
+links to per-run `report.html` when that file exists. If qrels are present, reports also show
+`ir_metrics` separately from expectation-based retrieval metrics.
 
 ## Streamlit Console
 
@@ -61,4 +62,9 @@ The console does not start real RAG runs and does not perform cleanup.
   timestamp pattern, then `summary.json` modified time as fallback.
 - Trends depend on consistent `dataset_id` values across runs.
 - Older artifacts without `metrics` still load, but metric cells are shown as `n/a`.
+- Older artifacts without `ir_metrics` still load; qrels-based IR sections are shown only when
+  present.
 - Links to per-run `report.html` appear only after those reports have been generated.
+
+See [ir_metrics.md](ir_metrics.md) for the qrels schema, document-level limitation, and metric
+definitions.

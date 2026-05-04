@@ -27,6 +27,7 @@ NEW_DATASET_IDS = {
     "uk_en_mixed_v1",
     "retrieval_precision_v1",
     "alpha_matrix_v1",
+    "qrels_smoke_v1",
 }
 
 
@@ -69,6 +70,19 @@ def test_root_baseline_datasets_still_load() -> None:
         load_dataset(DATASET_ROOT / "retrieval_baseline_v1.json").dataset_id
         == "retrieval_baseline_v1"
     )
+
+
+def test_qrels_smoke_dataset_loads_successfully() -> None:
+    dataset = load_dataset(DATASET_ROOT / "regression" / "qrels_smoke_v1.json")
+
+    assert dataset.dataset_id == "qrels_smoke_v1"
+    assert all(query.qrels for query in dataset.queries)
+    assert {
+        qrel.document_key
+        for query in dataset.queries
+        for qrel in query.qrels
+        if qrel.relevance > 0
+    } <= {document.key for document in dataset.documents}
 
 
 def test_new_datasets_include_chunk_level_expectations() -> None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class SeedDocumentSpec(BaseModel):
@@ -15,6 +15,29 @@ class SeedDocumentSpec(BaseModel):
 class MetadataFilterSpec(BaseModel):
     field: str
     values: list[str]
+
+
+class QueryQrelSpec(BaseModel):
+    document_key: str
+    relevance: int = Field(ge=0, strict=True)
+    chunk_id: str | None = None
+    chunk_index: int | None = Field(default=None, ge=0)
+    chunk_contains: list[str] = Field(default_factory=list)
+
+    @field_validator("relevance", mode="before")
+    @classmethod
+    def validate_relevance_is_integer(cls, value: object) -> object:
+        if isinstance(value, bool):
+            raise ValueError("relevance must be an integer greater than or equal to 0")
+        return value
+
+    @model_validator(mode="after")
+    def validate_qrel(self) -> "QueryQrelSpec":
+        if not self.document_key.strip():
+            raise ValueError("qrels document_key must not be empty")
+        if any(not fragment.strip() for fragment in self.chunk_contains):
+            raise ValueError("qrels chunk_contains fragments must not be empty")
+        return self
 
 
 class QueryExpectations(BaseModel):
@@ -49,6 +72,7 @@ class QueryCaseSpec(BaseModel):
     document_scope: Literal["all"] | list[str] = "all"
     filters: list[MetadataFilterSpec] = Field(default_factory=list)
     expectations: QueryExpectations = Field(default_factory=QueryExpectations)
+    qrels: list[QueryQrelSpec] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_query_case(self) -> "QueryCaseSpec":
@@ -97,5 +121,18 @@ class RetrievalDataset(BaseModel):
                 raise ValueError(
                     f"query {query.query_id!r} references unknown document keys in expectations: "
                     f"{missing_expectations}"
+                )
+
+            missing_qrels = sorted(
+                {
+                    qrel.document_key
+                    for qrel in query.qrels
+                    if qrel.document_key not in document_key_set
+                }
+            )
+            if missing_qrels:
+                raise ValueError(
+                    f"query {query.query_id!r} references unknown document keys in qrels: "
+                    f"{missing_qrels}"
                 )
         return self

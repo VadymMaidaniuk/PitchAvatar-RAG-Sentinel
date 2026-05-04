@@ -338,6 +338,12 @@ def test_summary_json_includes_metrics_after_retrieval_flow_execution(
                         "expected_top1_chunk_contains": ["rollback window", "approval"],
                         "forbidden_chunk_contains": ["deprecated procedure"],
                     },
+                    "qrels": [
+                        {
+                            "document_key": "doc_runbook",
+                            "relevance": 2,
+                        }
+                    ],
                 }
             ],
         }
@@ -361,3 +367,15 @@ def test_summary_json_includes_metrics_after_retrieval_flow_execution(
     assert metrics["search_total_ms"] >= 0.0
     assert metrics["cleanup_total_ms"] >= 0.0
     assert summary.metrics == metrics
+    ir_metrics = payload["ir_metrics"]
+    assert ir_metrics["queries_with_qrels"] == 1
+    assert ir_metrics["hit_rate_at_1"] == 1.0
+    assert ir_metrics["recall_at_5"] == 1.0
+    assert ir_metrics["precision_at_5"] == 0.2
+    assert ir_metrics["mrr"] == 1.0
+    assert summary.ir_metrics == ir_metrics
+    query_artifact = json.loads(
+        (Path(summary.run_dir) / "queries" / "q_runbook.json").read_text(encoding="utf-8")
+    )
+    assert query_artifact["ir_evaluation"]["relevant_document_keys"] == ["doc_runbook"]
+    assert query_artifact["ir_evaluation"]["hit_at_5"] is True

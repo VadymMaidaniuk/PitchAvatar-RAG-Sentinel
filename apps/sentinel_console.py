@@ -25,7 +25,7 @@ from pitchavatar_rag_sentinel.reporting.artifacts import (
     latest_run_by_dataset,
     sort_run_history_latest_first,
 )
-from pitchavatar_rag_sentinel.reporting.report import SUMMARY_METRIC_NAMES
+from pitchavatar_rag_sentinel.reporting.report import IR_METRIC_NAMES, SUMMARY_METRIC_NAMES
 
 
 def sort_runs_latest_first(runs: list[ArtifactRunRef]) -> list[ArtifactRunRef]:
@@ -82,6 +82,10 @@ def summary_rows(report: ArtifactRunReport) -> list[dict[str, str]]:
 
 def metric_rows(report: ArtifactRunReport) -> list[dict[str, str]]:
     return _named_value_rows(report.metrics, SUMMARY_METRIC_NAMES)
+
+
+def ir_metric_rows(report: ArtifactRunReport) -> list[dict[str, str]]:
+    return _named_value_rows(report.ir_metrics, IR_METRIC_NAMES)
 
 
 def timing_rows(report: ArtifactRunReport) -> list[dict[str, str]]:
@@ -454,6 +458,9 @@ def latest_dataset_status_rows(
             "all_queries_passed": _status_text(row.all_queries_passed),
             "cleanup_failed": cleanup_failed_text(row.cleanup_failed),
             "query_pass_rate": format_metric_value(row.query_pass_rate),
+            "hit_rate_at_5": format_metric_value(row.hit_rate_at_5),
+            "recall_at_5": format_metric_value(row.recall_at_5),
+            "mrr": format_metric_value(row.mrr),
             "failed_queries": row.failed_queries,
             "total_queries": row.total_queries,
         }
@@ -475,6 +482,10 @@ def trend_table_rows(
             "all_queries_passed": _status_text(row.all_queries_passed),
             "cleanup_failed": cleanup_failed_text(row.cleanup_failed),
             "query_pass_rate": format_metric_value(row.query_pass_rate),
+            "hit_rate_at_5": format_metric_value(row.hit_rate_at_5),
+            "recall_at_5": format_metric_value(row.recall_at_5),
+            "mrr": format_metric_value(row.mrr),
+            "ndcg_at_10": format_metric_value(row.ndcg_at_10),
             "top1_document_accuracy": format_metric_value(row.top1_document_accuracy),
             "chunk_hit_rate_at_k": format_metric_value(row.chunk_hit_rate_at_k),
             "total_run_ms": format_metric_value(row.total_run_ms),
@@ -528,6 +539,9 @@ def _render_trend_charts(st: Any, history: list[ArtifactRunHistoryRow]) -> None:
     st.subheader("Metric Trends")
     chart_metrics = [
         "query_pass_rate",
+        "hit_rate_at_5",
+        "recall_at_5",
+        "mrr",
         "top1_document_accuracy",
         "chunk_hit_rate_at_k",
         "p95_search_ms",
@@ -583,6 +597,10 @@ def _render_report(
     if not _has_any_metric(report.metrics, SUMMARY_METRIC_NAMES):
         st.info("No metrics were found in summary.json.")
     st.dataframe(rows, hide_index=True, use_container_width=True)
+
+    if report.ir_metrics:
+        st.subheader("IR Metrics")
+        st.dataframe(ir_metric_rows(report), hide_index=True, use_container_width=True)
 
     st.subheader("Timing")
     rows = timing_rows(report)

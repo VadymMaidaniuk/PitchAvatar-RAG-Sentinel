@@ -49,6 +49,16 @@ def write_synthetic_artifacts(tmp_path: Path) -> Path:
                 "p95_search_ms": 30.0,
                 "max_search_ms": 30.0,
             },
+            "ir_metrics": {
+                "queries_with_qrels": 2,
+                "queries_with_positive_qrels": 2,
+                "hit_rate_at_1": 0.5,
+                "hit_rate_at_5": 1.0,
+                "recall_at_5": 0.75,
+                "precision_at_5": 0.3,
+                "mrr": 0.75,
+                "ndcg_at_10": 0.8,
+            },
             "query_results": [
                 {"query_id": "q_pass", "passed": True},
                 {"query_id": "q_fail", "passed": False},
@@ -90,6 +100,13 @@ def write_synthetic_artifacts(tmp_path: Path) -> Path:
                 "checks": [{"name": "expected_top1", "passed": True, "details": "ok"}],
                 "returned_document_ids": ["runtime-doc-a"],
                 "result_count": 1,
+            },
+            "ir_evaluation": {
+                "retrieved_document_ids": ["runtime-doc-a"],
+                "relevant_document_keys": ["doc_a"],
+                "relevant_document_ids": ["runtime-doc-a"],
+                "hit_at_5": True,
+                "reciprocal_rank": 1.0,
             },
         },
     )
@@ -142,6 +159,7 @@ def test_artifact_loader_loads_synthetic_summary_json(tmp_path: Path) -> None:
     assert report.dataset_id == "dataset-alpha"
     assert report.run_passed is False
     assert report.metrics["query_pass_rate"] == 0.5
+    assert report.ir_metrics["hit_rate_at_5"] == 1.0
 
 
 def test_artifact_loader_loads_query_artifacts(tmp_path: Path) -> None:
@@ -194,7 +212,9 @@ def test_missing_optional_fields_do_not_crash_report_generator(tmp_path: Path) -
     report_path = write_html_report(report)
 
     assert report_path.is_file()
-    assert "No retrieval metrics" in report_path.read_text(encoding="utf-8")
+    html = report_path.read_text(encoding="utf-8")
+    assert "No retrieval metrics" in html
+    assert "IR Metrics" not in html
 
 
 def test_report_generator_latest_fails_cleanly_when_no_artifacts_exist(
@@ -227,4 +247,6 @@ def test_report_includes_run_passed_query_pass_rate_and_failed_query_id(
 
     assert "run_passed" in html
     assert "query_pass_rate" in html
+    assert "IR Metrics" in html
+    assert "hit_rate_at_5" in html
     assert "q_fail" in html

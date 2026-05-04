@@ -22,6 +22,23 @@ SUMMARY_METRIC_NAMES = (
     "forbidden_chunk_violation_rate",
     "empty_query_pass_rate",
 )
+IR_METRIC_NAMES = (
+    "queries_with_qrels",
+    "queries_with_positive_qrels",
+    "hit_rate_at_1",
+    "hit_rate_at_5",
+    "hit_rate_at_10",
+    "recall_at_1",
+    "recall_at_5",
+    "recall_at_10",
+    "precision_at_1",
+    "precision_at_5",
+    "precision_at_10",
+    "mrr",
+    "ndcg_at_1",
+    "ndcg_at_5",
+    "ndcg_at_10",
+)
 
 
 def write_html_report(report: ArtifactRunReport, output_path: Path | str | None = None) -> Path:
@@ -47,6 +64,7 @@ def render_html_report(report: ArtifactRunReport) -> str:
             "<main>",
             _render_header(report),
             _render_metrics(report),
+            _render_ir_metrics(report),
             _render_timings(report),
             _render_failed_queries(report.failed_query_results),
             _render_all_queries(report.query_results),
@@ -93,6 +111,17 @@ def _render_metrics(report: ArtifactRunReport) -> str:
         metrics=report.metrics,
         metric_names=SUMMARY_METRIC_NAMES,
         empty_text="No retrieval metrics were found in summary.json.",
+    )
+
+
+def _render_ir_metrics(report: ArtifactRunReport) -> str:
+    if not report.ir_metrics:
+        return ""
+    return _render_metric_table(
+        title="IR Metrics",
+        metrics=report.ir_metrics,
+        metric_names=IR_METRIC_NAMES,
+        empty_text="No qrels-based IR metrics were found in summary.json.",
     )
 
 
