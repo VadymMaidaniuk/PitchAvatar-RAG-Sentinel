@@ -40,6 +40,7 @@ def calculate_query_ir_metrics(
     ranked_document_ids = _dedupe_preserving_order(retrieved_document_ids)
 
     evaluation: IrQueryEvaluation = {
+        "has_qrels": True,
         "retrieved_document_ids": ranked_document_ids,
         "relevant_document_keys": relevant_document_keys,
         "relevant_document_ids": relevant_document_ids,

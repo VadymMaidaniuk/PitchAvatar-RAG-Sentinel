@@ -299,6 +299,30 @@ def test_cleanup_failure_can_be_reported_as_warning_without_failing_run(
     assert payload["cleanup_results"][0]["cleanup_errors"]
 
 
+def test_summary_json_has_null_ir_metrics_when_no_queries_have_qrels(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: SentinelSettings,
+) -> None:
+    monkeypatch.setattr(
+        retrieval_flow_module,
+        "unique_document_id",
+        lambda namespace, slug: f"{namespace}-{slug}",
+    )
+
+    executor = RetrievalFlowExecutor(
+        settings=settings,
+        rag_client=FakeRagClient(),
+        opensearch_helper=SuccessfulOpenSearchHelper(),
+        artifact_writer=ArtifactWriter(settings),
+    )
+
+    summary = executor.run_dataset(make_single_document_dataset("no-qrels-summary"))
+
+    payload = json.loads((Path(summary.run_dir) / "summary.json").read_text(encoding="utf-8"))
+    assert summary.ir_metrics is None
+    assert payload["ir_metrics"] is None
+
+
 def test_summary_json_includes_metrics_after_retrieval_flow_execution(
     monkeypatch: pytest.MonkeyPatch,
     settings: SentinelSettings,
@@ -377,5 +401,6 @@ def test_summary_json_includes_metrics_after_retrieval_flow_execution(
     query_artifact = json.loads(
         (Path(summary.run_dir) / "queries" / "q_runbook.json").read_text(encoding="utf-8")
     )
+    assert query_artifact["ir_evaluation"]["has_qrels"] is True
     assert query_artifact["ir_evaluation"]["relevant_document_keys"] == ["doc_runbook"]
     assert query_artifact["ir_evaluation"]["hit_at_5"] is True

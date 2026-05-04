@@ -29,9 +29,12 @@ RUN_HISTORY_METRIC_NAMES = (
     "p95_search_ms",
 )
 RUN_HISTORY_IR_METRIC_NAMES = (
+    "hit_rate_at_1",
     "hit_rate_at_5",
     "recall_at_5",
+    "precision_at_5",
     "mrr",
+    "ndcg_at_5",
     "ndcg_at_10",
 )
 
@@ -118,9 +121,12 @@ class ArtifactRunHistoryRow:
     chunk_hit_rate_at_k: float | None
     forbidden_doc_violation_rate: float | None
     forbidden_chunk_violation_rate: float | None
+    hit_rate_at_1: float | None
     hit_rate_at_5: float | None
     recall_at_5: float | None
+    precision_at_5: float | None
     mrr: float | None
+    ndcg_at_5: float | None
     ndcg_at_10: float | None
     total_run_ms: float | None
     p95_search_ms: float | None
@@ -288,10 +294,10 @@ def load_run_history_row(artifact_dir: Path | str) -> ArtifactRunHistoryRow:
         forbidden_chunk_violation_rate=_optional_float(
             metrics.get("forbidden_chunk_violation_rate")
         ),
-        hit_rate_at_5=_optional_float(ir_metrics.get("hit_rate_at_5")),
-        recall_at_5=_optional_float(ir_metrics.get("recall_at_5")),
-        mrr=_optional_float(ir_metrics.get("mrr")),
-        ndcg_at_10=_optional_float(ir_metrics.get("ndcg_at_10")),
+        **{
+            metric_name: _optional_float(ir_metrics.get(metric_name))
+            for metric_name in RUN_HISTORY_IR_METRIC_NAMES
+        },
         total_run_ms=_optional_float(metrics.get("total_run_ms")),
         p95_search_ms=_optional_float(metrics.get("p95_search_ms")),
         failed_queries=sum(1 for result in query_results if result.get("passed") is False),

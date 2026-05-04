@@ -57,9 +57,12 @@ def write_trend_artifacts(tmp_path: Path) -> Path:
             },
             "ir_metrics": {
                 "queries_with_qrels": 2,
+                "hit_rate_at_1": 0.25,
                 "hit_rate_at_5": 0.5,
                 "recall_at_5": 0.75,
+                "precision_at_5": 0.3,
                 "mrr": 0.5,
+                "ndcg_at_5": 0.55,
                 "ndcg_at_10": 0.6,
             },
             "query_results": [
@@ -85,9 +88,12 @@ def write_trend_artifacts(tmp_path: Path) -> Path:
             },
             "ir_metrics": {
                 "queries_with_qrels": 1,
+                "hit_rate_at_1": 1.0,
                 "hit_rate_at_5": 1.0,
                 "recall_at_5": 1.0,
+                "precision_at_5": 0.2,
                 "mrr": 1.0,
+                "ndcg_at_5": 1.0,
                 "ndcg_at_10": 1.0,
             },
             "query_results": [{"query_id": "q_pass", "passed": True}],
@@ -122,9 +128,12 @@ def test_run_history_loader_handles_old_artifacts_without_metrics(tmp_path: Path
 
     assert beta_row.query_pass_rate is None
     assert beta_row.top1_document_accuracy is None
+    assert beta_row.hit_rate_at_1 is None
     assert beta_row.hit_rate_at_5 is None
     assert beta_row.recall_at_5 is None
+    assert beta_row.precision_at_5 is None
     assert beta_row.mrr is None
+    assert beta_row.ndcg_at_5 is None
     assert beta_row.total_queries == 1
     assert beta_row.created_at_source == "summary_mtime"
 
@@ -193,9 +202,12 @@ def test_trends_csv_is_generated(tmp_path: Path) -> None:
         rows = list(csv.DictReader(handle))
     assert len(rows) == 3
     assert "query_pass_rate" in rows[0]
+    assert "hit_rate_at_1" in rows[0]
     assert "hit_rate_at_5" in rows[0]
     assert "recall_at_5" in rows[0]
+    assert "precision_at_5" in rows[0]
     assert "mrr" in rows[0]
+    assert "ndcg_at_5" in rows[0]
     assert "ndcg_at_10" in rows[0]
     assert {row["dataset_id"] for row in rows} == {"dataset-alpha", "dataset-beta"}
 
@@ -209,12 +221,15 @@ def test_streamlit_trend_helpers_filter_and_format_rows(tmp_path: Path) -> None:
     assert trend_dataset_options(history) == ["dataset-alpha", "dataset-beta"]
     assert [row.dataset_id for row in filtered] == ["dataset-alpha", "dataset-alpha"]
     assert latest_dataset_status_rows(filtered)[0]["run_passed"] == "passed"
+    assert latest_dataset_status_rows(filtered)[0]["hit_rate_at_1"] == "1"
     assert latest_dataset_status_rows(filtered)[0]["hit_rate_at_5"] == "1"
     assert trend_table_rows(filtered, artifacts_root=root)[0]["report_html"].endswith(
         "report.html"
     )
     assert trend_chart_rows(filtered, "query_pass_rate")[0]["query_pass_rate"] == 0.5
+    assert trend_chart_rows(filtered, "hit_rate_at_1")[0]["hit_rate_at_1"] == 0.25
     assert trend_chart_rows(filtered, "hit_rate_at_5")[0]["hit_rate_at_5"] == 0.5
+    assert trend_chart_rows(filtered, "precision_at_5")[0]["precision_at_5"] == 0.3
     assert failed_query_chart_rows(filtered)[0]["failed_queries"] == 1
 
 

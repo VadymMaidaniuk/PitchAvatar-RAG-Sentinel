@@ -30,9 +30,12 @@ TREND_CSV_COLUMNS = (
     "chunk_hit_rate_at_k",
     "forbidden_doc_violation_rate",
     "forbidden_chunk_violation_rate",
+    "hit_rate_at_1",
     "hit_rate_at_5",
     "recall_at_5",
+    "precision_at_5",
     "mrr",
+    "ndcg_at_5",
     "ndcg_at_10",
     "total_run_ms",
     "p95_search_ms",
@@ -135,8 +138,10 @@ def _render_latest_table(rows: list[ArtifactRunHistoryRow], output_dir: Path) ->
                 "Queries",
                 "Cleanup",
                 "Query Pass Rate",
+                "IR Hit@1",
                 "IR Hit@5",
                 "IR Recall@5",
+                "IR Precision@5",
                 "IR MRR",
                 "Failed Queries",
                 "Report",
@@ -165,9 +170,12 @@ def _render_history_table(rows: list[ArtifactRunHistoryRow], output_dir: Path) -
                 "Queries",
                 "Cleanup",
                 "Query Pass Rate",
+                "IR Hit@1",
                 "IR Hit@5",
                 "IR Recall@5",
+                "IR Precision@5",
                 "IR MRR",
+                "IR NDCG@5",
                 "IR NDCG@10",
                 "Top1 Doc",
                 "Chunk Hit@K",
@@ -196,8 +204,10 @@ def _render_run_row(row: ArtifactRunHistoryRow, output_dir: Path, *, compact: bo
         f"<td>{_status_badge(row.all_queries_passed)}</td>",
         f"<td>{_cleanup_badge(row.cleanup_failed)}</td>",
         f"<td>{_html(_format_metric(row.query_pass_rate))}</td>",
+        f"<td>{_html(_format_metric(row.hit_rate_at_1))}</td>",
         f"<td>{_html(_format_metric(row.hit_rate_at_5))}</td>",
         f"<td>{_html(_format_metric(row.recall_at_5))}</td>",
+        f"<td>{_html(_format_metric(row.precision_at_5))}</td>",
         f"<td>{_html(_format_metric(row.mrr))}</td>",
     ]
     if compact:
@@ -209,6 +219,7 @@ def _render_run_row(row: ArtifactRunHistoryRow, output_dir: Path, *, compact: bo
     else:
         cells = [
             *base_cells,
+            f"<td>{_html(_format_metric(row.ndcg_at_5))}</td>",
             f"<td>{_html(_format_metric(row.ndcg_at_10))}</td>",
             f"<td>{_html(_format_metric(row.top1_document_accuracy))}</td>",
             f"<td>{_html(_format_metric(row.chunk_hit_rate_at_k))}</td>",
@@ -263,9 +274,12 @@ def _column_class(heading: str, index: int) -> str:
     if heading == "Query Pass Rate":
         return "col-metric-wide"
     if heading in {
+        "IR Hit@1",
         "IR Hit@5",
         "IR Recall@5",
+        "IR Precision@5",
         "IR MRR",
+        "IR NDCG@5",
         "IR NDCG@10",
         "Top1 Doc",
         "Chunk Hit@K",

@@ -38,7 +38,9 @@ Use `--output` and `--csv-output` to choose different paths.
 The trends report includes overall run count, datasets covered, latest status per dataset, all runs
 sorted latest-first, pass/fail status, failed query counts, retrieval metrics, timing metrics, and
 links to per-run `report.html` when that file exists. If qrels are present, reports also show
-`ir_metrics` separately from expectation-based retrieval metrics.
+`ir_metrics` separately from expectation-based retrieval metrics. Trends expose key IR fields when
+available: `hit_rate_at_1`, `hit_rate_at_5`, `recall_at_5`, `precision_at_5`, `mrr`, `ndcg_at_5`,
+and `ndcg_at_10`.
 
 ## Streamlit Console
 

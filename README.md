@@ -153,6 +153,7 @@ Each query can declare:
 - `document_scope`
 - `filters`
 - `expectations`
+- optional `qrels`
 
 Expectations currently support:
 
@@ -172,6 +173,24 @@ Chunk-level checks:
 
 Chunk checks are deterministic text checks, not LLM evaluation. Matching is case-insensitive
 and normalizes whitespace before comparing fragments.
+
+Optional qrels add relevance labels for classic document-level IR metrics. They answer a different
+question than expectations: expectation-based metrics ask "did this explicit test scenario pass?",
+while qrels-based IR metrics ask "how good was the ranking against relevance labels?"
+
+Example qrel:
+
+```json
+{
+  "document_key": "doc_upload_limits",
+  "relevance": 2
+}
+```
+
+Recommended relevance values are `0` for not relevant, `1` for partially relevant, and `2` for
+highly relevant. Only document-level qrels are scored today; chunk-level qrels are future work until
+stable chunk ids or chunk metadata are available from the RAG service. See
+[docs/ir_metrics.md](C:/Projects/PitchAvatar-RAG-Sentinel/docs/ir_metrics.md).
 
 Example chunk-level expectation:
 
@@ -324,6 +343,7 @@ Artifacts contain:
 - cleanup status
 - cleanup warnings and structured cleanup errors when cleanup fails
 - deterministic aggregate metrics in `summary.json`
+- qrels-based IR metrics in `summary.json` when queries define `qrels`
 
 By default `RAG_SENTINEL_FAIL_ON_CLEANUP_ERROR=true`, so a final cleanup failure makes the
 overall run fail after `summary.json` is written. Set it to `false` only when you want retrieval
@@ -362,6 +382,12 @@ These are not `pytrec_eval` metrics yet, not Ragas metrics yet, and not LLM-as-j
 are intended for regression reporting now and future dashboard visualization later. Rates are
 reported as floats from `0.0` to `1.0`; when no explicit checks apply, the corresponding rate is
 `null`.
+
+When datasets include qrels, `summary.json` also includes a separate `ir_metrics` object with
+document-level ranking metrics such as `hit_rate_at_1`, `hit_rate_at_5`, `recall_at_5`,
+`precision_at_5`, `mrr`, `ndcg_at_5`, and `ndcg_at_10`. These are kept separate from `metrics` and
+do not affect expectation pass/fail status. The current implementation is dependency-free;
+`pytrec_eval` can be considered later once the qrels format is stable.
 
 Status fields differ intentionally:
 

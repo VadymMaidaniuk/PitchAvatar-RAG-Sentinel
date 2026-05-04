@@ -47,6 +47,12 @@ Rules:
 - `relevance > 0` means relevant.
 - `relevance = 0` is allowed for an explicitly judged non-relevant document, but is not required.
 
+Recommended relevance scale:
+
+- `0` = not relevant
+- `1` = partially relevant
+- `2` = highly relevant
+
 ## Metrics
 
 For queries with qrels, RAG Sentinel calculates document-level metrics at `k = 1, 5, 10`:
@@ -56,6 +62,11 @@ For queries with qrels, RAG Sentinel calculates document-level metrics at `k = 1
 - `precision_at_k`
 - `mrr`
 - `ndcg_at_k`
+
+Precision uses the fixed cutoff convention: `precision_at_k = relevant documents retrieved in
+top-k / k`. If fewer than `k` results are returned, the denominator is still `k`.
+
+NDCG uses qrel `relevance` values as graded relevance scores.
 
 Duplicate retrieved document ids are deduplicated before document-level scoring so repeated chunks
 from the same document do not inflate results.

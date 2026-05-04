@@ -53,6 +53,7 @@ def test_hit_rate_at_k_calculation() -> None:
     summary = calculate_summary_ir_metrics([evaluation])
 
     assert evaluation is not None
+    assert evaluation["has_qrels"] is True
     assert evaluation["hit_at_1"] is False
     assert evaluation["hit_at_5"] is True
     assert summary is not None
