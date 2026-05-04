@@ -10,9 +10,10 @@ from pitchavatar_rag_sentinel.dataset_builder.drafts import (
     QueryDraft,
     build_retrieval_dataset,
     dataset_to_pretty_json,
-    make_document_key,
+    document_keys_for_source,
+    resolve_document_mode,
 )
-from pitchavatar_rag_sentinel.dataset_builder.parsers import parse_source_text
+from pitchavatar_rag_sentinel.dataset_builder.parsers import ParserDependencyError, parse_source_bytes
 from pitchavatar_rag_sentinel.reporting.artifacts import (
     ArtifactDatasetRef,
     ArtifactLoader,
@@ -177,14 +178,19 @@ def _render_artifact_console(st: Any) -> None:
 
 
 def _render_dataset_builder(st: Any) -> None:
-    uploaded_file = st.file_uploader("Source file", type=["txt", "md"])
+    uploaded_file = st.file_uploader("Source file", type=["txt", "md", "pdf", "pptx"])
     if uploaded_file is None:
-        st.info("Upload a .txt or .md file to preview local sections.")
+        st.info("Upload a .txt, .md, .pdf, or .pptx file to preview local sections.")
         return
 
-    source_text = uploaded_file.getvalue().decode("utf-8", errors="replace")
     try:
-        parsed_source = parse_source_text(source_text, source_file_name=uploaded_file.name)
+        parsed_source = parse_source_bytes(
+            uploaded_file.getvalue(),
+            source_file_name=uploaded_file.name,
+        )
+    except ParserDependencyError as exc:
+        st.error(str(exc))
+        return
     except ValueError as exc:
         st.error(str(exc))
         return
@@ -192,25 +198,49 @@ def _render_dataset_builder(st: Any) -> None:
     st.metric("Extracted characters", len(parsed_source.extracted_text))
     st.metric("Sections", len(parsed_source.sections))
 
-    section_rows = [
-        {
-            "document_key": make_document_key(parsed_source.source_file_name, section),
+    document_modes = ["file_as_document", "section_as_document"]
+    default_document_mode = resolve_document_mode(parsed_source)
+    document_mode = st.selectbox(
+        "Document mode",
+        options=document_modes,
+        index=document_modes.index(default_document_mode),
+        help=(
+            "file_as_document creates one dataset document per uploaded file. "
+            "section_as_document creates one dataset document per parsed section."
+        ),
+    )
+    st.info(
+        "For production-like PitchAvatar testing, use file_as_document for PDF/PPTX and "
+        "validate retrieval with chunk-level expectations such as "
+        "expected_top1_chunk_contains or expected_in_topk_chunk_contains. For controlled "
+        "QA/debug tests, use section_as_document."
+    )
+
+    document_keys = document_keys_for_source(parsed_source, document_mode=document_mode)
+    if document_keys:
+        st.caption(f"Generated document keys: {', '.join(document_keys)}")
+
+    section_rows: list[dict[str, Any]] = []
+    section_document_keys = document_keys if document_mode == "section_as_document" else []
+    for section_index, section in enumerate(parsed_source.sections):
+        row = {
             "section_id": section.section_id,
             "title": section.title,
             "characters": section.character_count,
             "preview": _preview_text(section.text, 180),
         }
-        for section in parsed_source.sections
-    ]
+        if section_document_keys:
+            row["document_key"] = section_document_keys[section_index]
+        section_rows.append(row)
+
     if section_rows:
         st.dataframe(section_rows, hide_index=True, use_container_width=True)
     else:
-        st.warning("No text sections were extracted from this file.")
+        st.warning(_no_sections_message(uploaded_file.name))
 
     default_dataset_id = f"{_slugify(Path(uploaded_file.name).stem) or 'dataset'}_draft"
     dataset_id = st.text_input("dataset_id", value=default_dataset_id)
     query_count = st.number_input("Query drafts", min_value=1, max_value=5, value=1, step=1)
-    document_keys = [row["document_key"] for row in section_rows]
     document_options = ["", *document_keys]
     query_drafts: list[QueryDraft] = []
 
@@ -243,24 +273,24 @@ def _render_dataset_builder(st: Any) -> None:
                 "expected_top1",
                 options=document_options,
                 format_func=lambda value: value or "none",
-                key=f"builder_expected_top1_{index}",
+                key=f"builder_expected_top1_{document_mode}_{index}",
             )
             expected_in_topk = st.multiselect(
                 "expected_in_topk",
                 options=document_keys,
                 default=[expected_top1] if expected_top1 else [],
-                key=f"builder_expected_in_topk_{index}",
+                key=f"builder_expected_in_topk_{document_mode}_{index}",
             )
             forbidden_docs = st.multiselect(
                 "forbidden_docs",
                 options=document_keys,
-                key=f"builder_forbidden_docs_{index}",
+                key=f"builder_forbidden_docs_{document_mode}_{index}",
             )
             document_scope = st.multiselect(
                 "document_scope",
                 options=document_keys,
                 help="Leave empty to use all generated documents.",
-                key=f"builder_document_scope_{index}",
+                key=f"builder_document_scope_{document_mode}_{index}",
             )
             expected_top1_fragments = st.text_area(
                 "expected_top1_chunk_contains",
@@ -304,6 +334,7 @@ def _render_dataset_builder(st: Any) -> None:
             dataset_id=dataset_id.strip(),
             parsed_source=parsed_source,
             query_drafts=query_drafts,
+            document_mode=document_mode,
         )
     except ValueError as exc:
         st.error(str(exc))
@@ -459,6 +490,18 @@ def _preview_text(value: str, limit: int) -> str:
     if len(value) <= limit:
         return value
     return f"{value[: max(0, limit - 3)].rstrip()}..."
+
+
+def _no_sections_message(source_file_name: str) -> str:
+    source_type = Path(source_file_name).suffix.lower()
+    if source_type == ".pdf":
+        return (
+            "No text sections were extracted. PDF support is text-layer only; scanned PDFs "
+            "require OCR, which is not part of the offline Dataset Builder."
+        )
+    if source_type == ".pptx":
+        return "No slide text was extracted from this deck."
+    return "No text sections were extracted from this file."
 
 
 def _slugify(value: str) -> str:

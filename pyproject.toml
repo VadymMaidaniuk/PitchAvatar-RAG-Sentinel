@@ -39,6 +39,10 @@ ui = [
   "pytest-playwright>=0.7,<1",
   "streamlit>=1.36,<2",
 ]
+parsers = [
+  "pypdf>=5.0,<7",
+  "python-pptx>=1.0,<2",
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

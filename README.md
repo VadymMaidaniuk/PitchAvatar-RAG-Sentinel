@@ -59,6 +59,12 @@ Install optional UI dependencies when you want the local artifact console:
 .venv\Scripts\python -m pip install -e ".[dev,report,ui]"
 ```
 
+Install parser extras when you want the offline Dataset Builder to preview PDF or PPTX sources:
+
+```powershell
+.venv\Scripts\python -m pip install -e ".[dev,report,ui,parsers]"
+```
+
 ## Preflight
 
 Before the first real run:
@@ -230,16 +236,27 @@ Validate a dataset run plan without gRPC/OpenSearch calls:
 .venv\Scripts\python scripts\run_dataset.py datasets\retrieval\quantum_baseline.json --dry-run
 ```
 
-Preview local `.txt` or `.md` source sections for a draft dataset:
+Preview local `.txt`, `.md`, `.pdf`, or `.pptx` source sections for a draft dataset:
 
 ```powershell
 .venv\Scripts\python scripts\preview_dataset_source.py path\to\source.md
+.venv\Scripts\python scripts\preview_dataset_source.py path\to\file.pdf
+.venv\Scripts\python scripts\preview_dataset_source.py path\to\deck.pptx
 ```
 
 The Dataset Builder is an offline drafting helper, not an automatic dataset generator. A parsed
 file only becomes a useful retrieval dataset after QA manually defines queries, expected documents
-or sections, and expected chunk fragments. Current source parsing supports `.txt` and `.md`; PDF,
-DOCX, and PPTX are future adapters. Always dry-run generated JSON before any real retrieval run:
+or sections, and expected chunk fragments. Current source parsing supports `.txt`, `.md`, `.pdf`,
+and `.pptx`. PDF support is text-layer only; scanned PDFs are not supported yet. PPTX support
+extracts slide text and table-cell text, not visual layout, images, charts, animations, or speaker
+notes.
+
+In the real PitchAvatar pipeline, PHP extracts text from uploaded files before the Go/RAG chunking
+pipeline receives it, so page and slide metadata may not be preserved in RAG chunks. For
+production-like PDF/PPTX tests, use `file_as_document` and prefer chunk-level expectations such as
+`expected_top1_chunk_contains` or `expected_in_topk_chunk_contains`. Use `section_as_document` for
+controlled QA/debug retrieval experiments. Always dry-run generated JSON before any real retrieval
+run:
 
 ```powershell
 .venv\Scripts\python scripts\run_dataset.py path\to\generated_dataset.json --dry-run
