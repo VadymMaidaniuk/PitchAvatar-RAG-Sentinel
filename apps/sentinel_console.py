@@ -17,10 +17,13 @@ from pitchavatar_rag_sentinel.dataset_builder.parsers import ParserDependencyErr
 from pitchavatar_rag_sentinel.reporting.artifacts import (
     ArtifactDatasetRef,
     ArtifactLoader,
+    ArtifactRunHistoryRow,
     ArtifactRunRef,
     ArtifactRunReport,
     QueryArtifactReport,
     TIMING_METRIC_NAMES,
+    latest_run_by_dataset,
+    sort_run_history_latest_first,
 )
 from pitchavatar_rag_sentinel.reporting.report import SUMMARY_METRIC_NAMES
 
@@ -134,16 +137,21 @@ def main() -> None:
         "No RAG runs or cleanup actions are available here."
     )
 
-    artifact_tab, dataset_builder_tab = st.tabs(["Artifacts", "Dataset Builder"])
+    artifacts_root_text = st.sidebar.text_input("Artifacts root", value="artifacts/runs")
+    artifacts_root = Path(artifacts_root_text)
+
+    artifact_tab, trends_tab, dataset_builder_tab = st.tabs(
+        ["Artifacts", "Trends", "Dataset Builder"]
+    )
     with artifact_tab:
-        _render_artifact_console(st)
+        _render_artifact_console(st, artifacts_root)
+    with trends_tab:
+        _render_trends_console(st, artifacts_root)
     with dataset_builder_tab:
         _render_dataset_builder(st)
 
 
-def _render_artifact_console(st: Any) -> None:
-    artifacts_root_text = st.sidebar.text_input("Artifacts root", value="artifacts/runs")
-    artifacts_root = Path(artifacts_root_text)
+def _render_artifact_console(st: Any, artifacts_root: Path) -> None:
     if not artifacts_root.exists():
         st.info(f"Artifact root does not exist: {artifacts_root}")
         return
@@ -174,7 +182,72 @@ def _render_artifact_console(st: Any) -> None:
         return
 
     report = loader.load_report(selected_dataset.path)
-    _render_report(st, report, selected_run, selected_dataset)
+    _render_report(st, report, selected_run, selected_dataset, key_prefix="artifact")
+
+
+def _render_trends_console(st: Any, artifacts_root: Path) -> None:
+    if not artifacts_root.exists():
+        st.info(f"Artifact root does not exist: {artifacts_root}")
+        return
+
+    loader = ArtifactLoader(artifacts_root)
+    history = loader.load_run_history()
+    if not history:
+        st.info(f"No artifact summaries were found under {artifacts_root}.")
+        return
+
+    dataset_options = trend_dataset_options(history)
+    selected_datasets = st.multiselect(
+        "Dataset filter",
+        options=dataset_options,
+        default=dataset_options,
+        key="trends_dataset_filter",
+    )
+    filtered_history = filter_trend_history(history, selected_datasets)
+    if not filtered_history:
+        st.info("No runs match the selected dataset filter.")
+        return
+
+    st.subheader("Latest Status")
+    st.dataframe(
+        latest_dataset_status_rows(filtered_history),
+        hide_index=True,
+        use_container_width=True,
+    )
+
+    st.subheader("Runs")
+    st.dataframe(
+        trend_table_rows(filtered_history, artifacts_root=artifacts_root),
+        hide_index=True,
+        use_container_width=True,
+    )
+
+    _render_trend_charts(st, filtered_history)
+
+    selected_row = st.selectbox(
+        "Run details",
+        filtered_history,
+        format_func=lambda row: (
+            f"{row.created_at.isoformat()} | {row.dataset_id} | {row.run_id}"
+        ),
+        key="trends_run_details",
+    )
+    if selected_row is None:
+        return
+
+    report = loader.load_report(selected_row.artifact_dir)
+    selected_dataset = ArtifactDatasetRef(
+        run_id=selected_row.run_id,
+        dataset_id=selected_row.dataset_id,
+        path=selected_row.artifact_dir,
+    )
+    selected_run = ArtifactRunRef(
+        run_id=selected_row.run_id,
+        path=selected_row.artifact_dir.parent,
+        datasets=[selected_dataset],
+    )
+    with st.expander("Selected Run Details"):
+        _render_report(st, report, selected_run, selected_dataset, key_prefix="trends")
 
 
 def _render_dataset_builder(st: Any) -> None:
@@ -350,11 +423,153 @@ def _render_dataset_builder(st: Any) -> None:
     )
 
 
+def trend_dataset_options(history: list[ArtifactRunHistoryRow]) -> list[str]:
+    return sorted({row.dataset_id for row in history})
+
+
+def filter_trend_history(
+    history: list[ArtifactRunHistoryRow],
+    selected_datasets: list[str],
+) -> list[ArtifactRunHistoryRow]:
+    if not selected_datasets:
+        return []
+    selected = set(selected_datasets)
+    return [
+        row
+        for row in sort_run_history_latest_first(history)
+        if row.dataset_id in selected
+    ]
+
+
+def latest_dataset_status_rows(
+    history: list[ArtifactRunHistoryRow],
+) -> list[dict[str, str | int]]:
+    latest_rows = latest_run_by_dataset(history)
+    return [
+        {
+            "dataset_id": row.dataset_id,
+            "latest_run_id": row.run_id,
+            "created_at": row.created_at.isoformat(),
+            "run_passed": _status_text(row.run_passed),
+            "all_queries_passed": _status_text(row.all_queries_passed),
+            "cleanup_failed": cleanup_failed_text(row.cleanup_failed),
+            "query_pass_rate": format_metric_value(row.query_pass_rate),
+            "failed_queries": row.failed_queries,
+            "total_queries": row.total_queries,
+        }
+        for row in latest_rows.values()
+    ]
+
+
+def trend_table_rows(
+    history: list[ArtifactRunHistoryRow],
+    *,
+    artifacts_root: Path,
+) -> list[dict[str, str | int]]:
+    return [
+        {
+            "created_at": row.created_at.isoformat(),
+            "dataset_id": row.dataset_id,
+            "run_id": row.run_id,
+            "run_passed": _status_text(row.run_passed),
+            "all_queries_passed": _status_text(row.all_queries_passed),
+            "cleanup_failed": cleanup_failed_text(row.cleanup_failed),
+            "query_pass_rate": format_metric_value(row.query_pass_rate),
+            "top1_document_accuracy": format_metric_value(row.top1_document_accuracy),
+            "chunk_hit_rate_at_k": format_metric_value(row.chunk_hit_rate_at_k),
+            "total_run_ms": format_metric_value(row.total_run_ms),
+            "p95_search_ms": format_metric_value(row.p95_search_ms),
+            "failed_queries": row.failed_queries,
+            "total_queries": row.total_queries,
+            "artifact_dir": _relative_path(row.artifact_dir, artifacts_root),
+            "report_html": _relative_path(row.artifact_dir / "report.html", artifacts_root)
+            if (row.artifact_dir / "report.html").is_file()
+            else "",
+        }
+        for row in sort_run_history_latest_first(history)
+    ]
+
+
+def trend_chart_rows(
+    history: list[ArtifactRunHistoryRow],
+    metric_name: str,
+) -> list[dict[str, str | float | int]]:
+    rows: list[dict[str, str | float | int]] = []
+    for row in sorted(history, key=lambda item: (item.created_at, item.dataset_id, item.run_id)):
+        value = getattr(row, metric_name)
+        if value is None:
+            continue
+        rows.append(
+            {
+                "created_at": row.created_at.isoformat(),
+                "dataset_id": row.dataset_id,
+                metric_name: value,
+            }
+        )
+    return rows
+
+
+def failed_query_chart_rows(
+    history: list[ArtifactRunHistoryRow],
+) -> list[dict[str, str | int]]:
+    return [
+        {
+            "created_at": row.created_at.isoformat(),
+            "dataset_id": row.dataset_id,
+            "failed_queries": row.failed_queries,
+        }
+        for row in sorted(history, key=lambda item: (item.created_at, item.dataset_id, item.run_id))
+    ]
+
+
+def _render_trend_charts(st: Any, history: list[ArtifactRunHistoryRow]) -> None:
+    import pandas as pd
+
+    st.subheader("Metric Trends")
+    chart_metrics = [
+        "query_pass_rate",
+        "top1_document_accuracy",
+        "chunk_hit_rate_at_k",
+        "p95_search_ms",
+    ]
+    for metric_name in chart_metrics:
+        rows = trend_chart_rows(history, metric_name)
+        if not rows:
+            st.info(f"No values available for {metric_name}.")
+            continue
+        st.write(metric_name)
+        st.line_chart(
+            pd.DataFrame(rows),
+            x="created_at",
+            y=metric_name,
+            color="dataset_id",
+        )
+
+    rows = failed_query_chart_rows(history)
+    if rows:
+        st.write("failed_queries")
+        st.line_chart(
+            pd.DataFrame(rows),
+            x="created_at",
+            y="failed_queries",
+            color="dataset_id",
+        )
+
+
+def _relative_path(path: Path, root: Path) -> str:
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
+
+
 def _render_report(
     st: Any,
     report: ArtifactRunReport,
     selected_run: ArtifactRunRef,
     selected_dataset: ArtifactDatasetRef,
+    *,
+    key_prefix: str,
 ) -> None:
     st.subheader("Summary")
     summary_columns = st.columns(3)
@@ -395,6 +610,7 @@ def _render_report(
             "Query",
             report.query_results,
             format_func=lambda query: query.query_id,
+            key=f"{key_prefix}_query_detail",
         )
         if selected_query is not None:
             st.write("Evaluation checks")

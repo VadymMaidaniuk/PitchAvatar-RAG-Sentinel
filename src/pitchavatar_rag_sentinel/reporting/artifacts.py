@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,17 @@ TIMING_METRIC_NAMES = (
     "p50_search_ms",
     "p95_search_ms",
     "max_search_ms",
+)
+RUN_HISTORY_METRIC_NAMES = (
+    "query_pass_rate",
+    "top1_document_accuracy",
+    "document_hit_rate_at_k",
+    "top1_chunk_match_rate",
+    "chunk_hit_rate_at_k",
+    "forbidden_doc_violation_rate",
+    "forbidden_chunk_violation_rate",
+    "total_run_ms",
+    "p95_search_ms",
 )
 
 
@@ -82,6 +94,29 @@ class ArtifactRunReport:
     summary: dict[str, Any]
 
 
+@dataclass(frozen=True, slots=True)
+class ArtifactRunHistoryRow:
+    run_id: str
+    dataset_id: str
+    artifact_dir: Path
+    created_at: datetime
+    created_at_source: str
+    run_passed: bool | None
+    all_queries_passed: bool | None
+    cleanup_failed: bool | None
+    query_pass_rate: float | None
+    top1_document_accuracy: float | None
+    document_hit_rate_at_k: float | None
+    top1_chunk_match_rate: float | None
+    chunk_hit_rate_at_k: float | None
+    forbidden_doc_violation_rate: float | None
+    forbidden_chunk_violation_rate: float | None
+    total_run_ms: float | None
+    p95_search_ms: float | None
+    failed_queries: int
+    total_queries: int
+
+
 class ArtifactLoader:
     def __init__(self, artifacts_root: Path | str = Path("artifacts/runs")) -> None:
         self.artifacts_root = Path(artifacts_root)
@@ -97,6 +132,9 @@ class ArtifactLoader:
 
     def load_latest_report(self) -> ArtifactRunReport:
         return load_artifact_report(find_latest_artifact_dir(self.artifacts_root))
+
+    def load_run_history(self) -> list[ArtifactRunHistoryRow]:
+        return load_run_history(self.artifacts_root)
 
 
 def list_artifact_runs(artifacts_root: Path | str = Path("artifacts/runs")) -> list[ArtifactRunRef]:
@@ -166,6 +204,83 @@ def find_latest_artifact_dir(
             str(dataset_ref.path),
         ),
     ).path
+
+
+def find_summary_paths(artifacts_root: Path | str = Path("artifacts/runs")) -> list[Path]:
+    root = Path(artifacts_root)
+    if not root.exists():
+        return []
+    return sorted(
+        (path for path in root.rglob("summary.json") if path.is_file()),
+        key=lambda path: str(path),
+    )
+
+
+def load_run_history(
+    artifacts_root: Path | str = Path("artifacts/runs"),
+) -> list[ArtifactRunHistoryRow]:
+    rows = []
+    for summary_path in find_summary_paths(artifacts_root):
+        try:
+            rows.append(load_run_history_row(summary_path.parent))
+        except (FileNotFoundError, ValueError, json.JSONDecodeError):
+            continue
+    return sort_run_history_latest_first(rows)
+
+
+def sort_run_history_latest_first(
+    rows: list[ArtifactRunHistoryRow],
+) -> list[ArtifactRunHistoryRow]:
+    return sorted(
+        rows,
+        key=lambda row: (row.created_at, row.run_id, row.dataset_id, str(row.artifact_dir)),
+        reverse=True,
+    )
+
+
+def latest_run_by_dataset(
+    rows: list[ArtifactRunHistoryRow],
+) -> dict[str, ArtifactRunHistoryRow]:
+    latest: dict[str, ArtifactRunHistoryRow] = {}
+    for row in sort_run_history_latest_first(rows):
+        latest.setdefault(row.dataset_id, row)
+    return dict(sorted(latest.items(), key=lambda item: item[0]))
+
+
+def load_run_history_row(artifact_dir: Path | str) -> ArtifactRunHistoryRow:
+    path = Path(artifact_dir)
+    summary = load_summary(path)
+    metrics = _as_dict(summary.get("metrics"))
+    query_results = _list_of_dicts(summary.get("query_results"))
+    run_id = str(summary.get("run_id") or path.parent.name)
+    dataset_id = str(summary.get("dataset_id") or path.name)
+    created_at, created_at_source = _infer_created_at(summary, path, run_id)
+
+    return ArtifactRunHistoryRow(
+        run_id=run_id,
+        dataset_id=dataset_id,
+        artifact_dir=path,
+        created_at=created_at,
+        created_at_source=created_at_source,
+        run_passed=_optional_bool(summary.get("run_passed")),
+        all_queries_passed=_optional_bool(summary.get("all_queries_passed")),
+        cleanup_failed=_optional_bool(summary.get("cleanup_failed")),
+        query_pass_rate=_optional_float(metrics.get("query_pass_rate")),
+        top1_document_accuracy=_optional_float(metrics.get("top1_document_accuracy")),
+        document_hit_rate_at_k=_optional_float(metrics.get("document_hit_rate_at_k")),
+        top1_chunk_match_rate=_optional_float(metrics.get("top1_chunk_match_rate")),
+        chunk_hit_rate_at_k=_optional_float(metrics.get("chunk_hit_rate_at_k")),
+        forbidden_doc_violation_rate=_optional_float(
+            metrics.get("forbidden_doc_violation_rate")
+        ),
+        forbidden_chunk_violation_rate=_optional_float(
+            metrics.get("forbidden_chunk_violation_rate")
+        ),
+        total_run_ms=_optional_float(metrics.get("total_run_ms")),
+        p95_search_ms=_optional_float(metrics.get("p95_search_ms")),
+        failed_queries=sum(1 for result in query_results if result.get("passed") is False),
+        total_queries=len(query_results),
+    )
 
 
 def load_summary(artifact_dir: Path | str) -> dict[str, Any]:
@@ -330,7 +445,67 @@ def _optional_bool(value: Any) -> bool | None:
     return value if isinstance(value, bool) else None
 
 
+def _optional_float(value: Any) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
 def _optional_str(value: Any) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _infer_created_at(
+    summary: dict[str, Any],
+    artifact_dir: Path,
+    run_id: str,
+) -> tuple[datetime, str]:
+    for field_name in ("created_at", "started_at", "run_started_at", "timestamp"):
+        created_at = _parse_timestamp(summary.get(field_name))
+        if created_at is not None:
+            return created_at, field_name
+
+    created_at = _parse_timestamp_from_run_id(run_id)
+    if created_at is not None:
+        return created_at, "run_id"
+
+    summary_path = artifact_dir / "summary.json"
+    mtime = summary_path.stat().st_mtime if summary_path.exists() else artifact_dir.stat().st_mtime
+    return datetime.fromtimestamp(mtime, tz=timezone.utc), "summary_mtime"
+
+
+def _parse_timestamp(value: Any) -> datetime | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        timestamp = float(value)
+        if timestamp > 10_000_000_000:
+            timestamp = timestamp / 1000
+        return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+    if not isinstance(value, str):
+        return None
+
+    text = value.strip()
+    if not text:
+        return None
+    if text.isdigit():
+        return _parse_timestamp(int(text))
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _parse_timestamp_from_run_id(run_id: str) -> datetime | None:
+    digit_groups = [group for group in run_id.replace("_", "-").split("-") if group.isdigit()]
+    for group in reversed(digit_groups):
+        if 12 <= len(group) <= 17:
+            return _parse_timestamp(int(group))
+    return None

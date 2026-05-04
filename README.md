@@ -196,6 +196,7 @@ Dataset strategy and categories:
 
 - [docs/datasets.md](C:/Projects/PitchAvatar-RAG-Sentinel/docs/datasets.md)
 - [docs/dataset_builder.md](C:/Projects/PitchAvatar-RAG-Sentinel/docs/dataset_builder.md)
+- [docs/reporting.md](C:/Projects/PitchAvatar-RAG-Sentinel/docs/reporting.md)
 - [docs/smoke_calibration_report.md](C:/Projects/PitchAvatar-RAG-Sentinel/docs/smoke_calibration_report.md)
 
 ## Commands
@@ -275,6 +276,12 @@ Generate a report for the newest artifact directory under `artifacts/runs`:
 .venv\Scripts\python scripts\generate_report.py --latest
 ```
 
+Generate a read-only trends report across local artifact summaries:
+
+```powershell
+.venv\Scripts\python scripts\generate_trends_report.py --artifacts-root artifacts\runs
+```
+
 Launch the read-only Streamlit console for local artifacts:
 
 ```powershell
@@ -332,12 +339,16 @@ metrics, timing metrics, failed query details, all query results, and cleanup wa
 It lets QA select an artifact root, run, and dataset, then browse summary fields, metrics, timing
 metrics, failed queries, all queries, query detail JSON, and cleanup details.
 
+The console also includes a `Trends` tab. It scans local artifact summaries, supports dataset
+filtering, shows latest status per dataset, lists runs latest-first, and displays simple metric
+trend charts for pass rates, document/chunk metrics, timings, and failed query counts.
+
 The report viewer does not start real RAG runs, does not call gRPC or OpenSearch, and does not
 perform cleanup or any destructive action. It is intended for sharing and inspecting already
 captured QA artifacts.
 
-Future reporting work can build on the same loader for a trend dashboard, dataset builder, and
-real run launcher with explicit safety controls.
+Future reporting work can build on the same loader for richer trend analysis and dataset builder
+workflows. Real run launchers should stay behind explicit safety controls.
 
 ## Current metrics
 
