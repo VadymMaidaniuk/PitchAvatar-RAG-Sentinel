@@ -178,6 +178,9 @@ def test_trends_report_html_is_generated(
     assert "Latest Status Per Dataset" in html
     assert "dataset-alpha" in html
     assert "report.html" in html
+    assert 'class="table-scroll"' in html
+    assert 'class="trend-table"' in html
+    assert 'class="col-report"' in html
 
 
 def test_trends_csv_is_generated(tmp_path: Path) -> None:

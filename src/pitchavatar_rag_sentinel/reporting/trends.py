@@ -229,15 +229,55 @@ def _csv_row(row: ArtifactRunHistoryRow, *, output_dir: Path) -> dict[str, Any]:
 
 
 def _table(*, headings: tuple[str, ...], rows: str) -> str:
-    heading_html = "".join(f"<th>{_html(heading)}</th>" for heading in headings)
+    columns = [
+        (heading, _column_class(heading, index))
+        for index, heading in enumerate(headings)
+    ]
+    column_html = "".join(f'<col class="{css_class}">' for _, css_class in columns)
+    heading_html = "".join(
+        f'<th class="{css_class}">{_html(heading)}</th>'
+        for heading, css_class in columns
+    )
     return f"""
-<table>
-  <thead><tr>{heading_html}</tr></thead>
-  <tbody>
-    {rows}
-  </tbody>
-</table>
+<div class="table-scroll">
+  <table class="trend-table">
+    <colgroup>{column_html}</colgroup>
+    <thead><tr>{heading_html}</tr></thead>
+    <tbody>
+      {rows}
+    </tbody>
+  </table>
+</div>
 """.strip()
+
+
+def _column_class(heading: str, index: int) -> str:
+    if heading == "Dataset":
+        return "col-dataset"
+    if heading in {"Run", "Latest Run"} and index <= 1:
+        return "col-run-id"
+    if heading == "Created":
+        return "col-created"
+    if heading in {"Run", "Queries", "Cleanup"}:
+        return "col-status"
+    if heading == "Query Pass Rate":
+        return "col-metric-wide"
+    if heading in {
+        "IR Hit@5",
+        "IR Recall@5",
+        "IR MRR",
+        "IR NDCG@10",
+        "Top1 Doc",
+        "Chunk Hit@K",
+        "Total ms",
+        "P95 Search ms",
+    }:
+        return "col-metric"
+    if heading == "Failed Queries":
+        return "col-failed"
+    if heading == "Report":
+        return "col-report"
+    return "col-default"
 
 
 def _report_link(row: ArtifactRunHistoryRow, output_dir: Path) -> str:
@@ -337,9 +377,15 @@ h1 {
 h2 {
   font-size: 20px;
 }
-table {
-  border-collapse: collapse;
+.table-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
   width: 100%;
+}
+.trend-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: max-content;
 }
 th,
 td {
@@ -351,6 +397,37 @@ td {
 th {
   color: #435064;
   font-size: 13px;
+}
+th.col-report,
+td:last-child {
+  white-space: nowrap;
+}
+col.col-dataset {
+  width: 190px;
+}
+col.col-run-id {
+  width: 220px;
+}
+col.col-created {
+  width: 205px;
+}
+col.col-status {
+  width: 74px;
+}
+col.col-metric-wide {
+  width: 80px;
+}
+col.col-metric {
+  width: 74px;
+}
+col.col-failed {
+  width: 84px;
+}
+col.col-report {
+  width: 96px;
+}
+col.col-default {
+  width: 96px;
 }
 code {
   font-family: Consolas, "Liberation Mono", monospace;
