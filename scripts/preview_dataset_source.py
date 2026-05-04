@@ -23,6 +23,13 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if args.preview_chars < 0:
+        print("--preview-chars must be greater than or equal to 0.", file=sys.stderr)
+        return 2
+    if not args.source.is_file():
+        print(f"Source file not found: {args.source}", file=sys.stderr)
+        return 2
+
     try:
         parsed_source = parse_source_file(args.source)
     except (ParserDependencyError, ValueError) as exc:

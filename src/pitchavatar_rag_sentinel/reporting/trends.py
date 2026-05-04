@@ -3,7 +3,6 @@ from __future__ import annotations
 import csv
 import os
 from dataclasses import asdict
-from html import escape
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +11,10 @@ from pitchavatar_rag_sentinel.reporting.artifacts import (
     latest_run_by_dataset,
     load_run_history,
     sort_run_history_latest_first,
+)
+from pitchavatar_rag_sentinel.reporting.formatting import (
+    format_metric_value,
+    html_escape,
 )
 
 
@@ -313,9 +316,7 @@ def _created_at_text(row: ArtifactRunHistoryRow) -> str:
 
 
 def _format_metric(value: float | None) -> str:
-    if value is None:
-        return "n/a"
-    return f"{value:.4f}".rstrip("0").rstrip(".")
+    return format_metric_value(value)
 
 
 def _status_item(label: str, value: object) -> str:
@@ -344,9 +345,7 @@ def _cleanup_badge(value: bool | None) -> str:
 
 
 def _html(value: object) -> str:
-    if value is None:
-        return ""
-    return escape(str(value))
+    return html_escape(value)
 
 
 def _stylesheet() -> str:

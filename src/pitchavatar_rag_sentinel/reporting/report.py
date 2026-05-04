@@ -1,43 +1,23 @@
 from __future__ import annotations
 
-import json
-from html import escape
 from pathlib import Path
 from typing import Any
 
+from pitchavatar_rag_sentinel.reporting.constants import (
+    IR_METRIC_NAMES,
+    SUMMARY_METRIC_NAMES,
+    TIMING_METRIC_NAMES,
+)
 from pitchavatar_rag_sentinel.reporting.artifacts import (
     ArtifactRunReport,
     QueryArtifactReport,
-    TIMING_METRIC_NAMES,
 )
-
-
-SUMMARY_METRIC_NAMES = (
-    "query_pass_rate",
-    "top1_document_accuracy",
-    "document_hit_rate_at_k",
-    "top1_chunk_match_rate",
-    "chunk_hit_rate_at_k",
-    "forbidden_doc_violation_rate",
-    "forbidden_chunk_violation_rate",
-    "empty_query_pass_rate",
-)
-IR_METRIC_NAMES = (
-    "queries_with_qrels",
-    "queries_with_positive_qrels",
-    "hit_rate_at_1",
-    "hit_rate_at_5",
-    "hit_rate_at_10",
-    "recall_at_1",
-    "recall_at_5",
-    "recall_at_10",
-    "precision_at_1",
-    "precision_at_5",
-    "precision_at_10",
-    "mrr",
-    "ndcg_at_1",
-    "ndcg_at_5",
-    "ndcg_at_10",
+from pitchavatar_rag_sentinel.reporting.formatting import (
+    compact_json,
+    format_metric_value,
+    html_escape,
+    pretty_json,
+    status_text,
 )
 
 
@@ -350,39 +330,24 @@ def _badge(passed: bool) -> str:
 
 
 def _status_text(value: bool | None) -> str:
-    if value is True:
-        return "passed"
-    if value is False:
-        return "failed"
-    return "not reported"
+    return status_text(value)
 
 
 def _format_metric(value: Any, *, unit: str | None = None) -> str:
-    if value is None:
-        return "n/a"
-    if isinstance(value, float):
-        text = f"{value:.4f}".rstrip("0").rstrip(".")
-    else:
-        text = str(value)
+    text = format_metric_value(value)
     return f"{text} {unit}" if unit and value is not None else text
 
 
 def _compact_json(value: Any) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, str):
-        return value
-    return json.dumps(value, ensure_ascii=True, sort_keys=True)
+    return compact_json(value)
 
 
 def _json(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=True, indent=2, sort_keys=True)
+    return pretty_json(value)
 
 
 def _html(value: object) -> str:
-    if value is None:
-        return ""
-    return escape(str(value))
+    return html_escape(value)
 
 
 def _stylesheet() -> str:

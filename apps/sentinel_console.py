@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 from typing import Any
@@ -21,11 +20,21 @@ from pitchavatar_rag_sentinel.reporting.artifacts import (
     ArtifactRunRef,
     ArtifactRunReport,
     QueryArtifactReport,
-    TIMING_METRIC_NAMES,
     latest_run_by_dataset,
     sort_run_history_latest_first,
 )
-from pitchavatar_rag_sentinel.reporting.report import IR_METRIC_NAMES, SUMMARY_METRIC_NAMES
+from pitchavatar_rag_sentinel.reporting.constants import (
+    IR_METRIC_NAMES,
+    SUMMARY_METRIC_NAMES,
+    TIMING_METRIC_NAMES,
+    TREND_CHART_METRIC_NAMES,
+)
+from pitchavatar_rag_sentinel.reporting.formatting import (
+    cleanup_failed_text,
+    compact_json,
+    format_metric_value,
+    status_text as _status_text,
+)
 
 
 def sort_runs_latest_first(runs: list[ArtifactRunRef]) -> list[ArtifactRunRef]:
@@ -34,14 +43,6 @@ def sort_runs_latest_first(runs: list[ArtifactRunRef]) -> list[ArtifactRunRef]:
         key=lambda run: (_run_latest_mtime(run), run.run_id),
         reverse=True,
     )
-
-
-def format_metric_value(value: Any) -> str:
-    if value is None:
-        return "n/a"
-    if isinstance(value, float):
-        return f"{value:.4f}".rstrip("0").rstrip(".")
-    return str(value)
 
 
 def failed_check_names(query: QueryArtifactReport) -> str:
@@ -542,19 +543,7 @@ def _render_trend_charts(st: Any, history: list[ArtifactRunHistoryRow]) -> None:
     import pandas as pd
 
     st.subheader("Metric Trends")
-    chart_metrics = [
-        "query_pass_rate",
-        "hit_rate_at_1",
-        "hit_rate_at_5",
-        "recall_at_5",
-        "precision_at_5",
-        "mrr",
-        "ndcg_at_5",
-        "top1_document_accuracy",
-        "chunk_hit_rate_at_k",
-        "p95_search_ms",
-    ]
-    for metric_name in chart_metrics:
+    for metric_name in TREND_CHART_METRIC_NAMES:
         rows = trend_chart_rows(history, metric_name)
         if not rows:
             st.info(f"No values available for {metric_name}.")
@@ -698,22 +687,6 @@ def _run_latest_mtime(run: ArtifactRunRef) -> float:
     return max(mtimes, default=run.path.stat().st_mtime if run.path.exists() else 0.0)
 
 
-def _status_text(value: bool | None) -> str:
-    if value is True:
-        return "passed"
-    if value is False:
-        return "failed"
-    return "not reported"
-
-
-def cleanup_failed_text(value: bool | None) -> str:
-    if value is True:
-        return "failed"
-    if value is False:
-        return "ok"
-    return "not reported"
-
-
 def _has_any_metric(values: dict[str, Any], names: tuple[str, ...]) -> bool:
     return any(name in values for name in names)
 
@@ -752,11 +725,7 @@ def _slugify(value: str) -> str:
 
 
 def _compact_json(value: Any) -> str:
-    if value in (None, [], {}):
-        return ""
-    if isinstance(value, str):
-        return value
-    return json.dumps(value, ensure_ascii=True, sort_keys=True)
+    return compact_json(value, blank_empty=True)
 
 
 if __name__ == "__main__":

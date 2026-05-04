@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import sys
 from pathlib import Path
 
 from pitchavatar_rag_sentinel.clients.opensearch_helper import OpenSearchHelper
@@ -38,14 +39,26 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    settings = get_settings()
-    dataset = load_dataset(args.dataset)
+    try:
+        if not args.dataset.is_file():
+            print(f"Dataset file not found: {args.dataset}", file=sys.stderr)
+            return 2
+        settings = get_settings()
+        dataset = load_dataset(args.dataset)
+    except (OSError, ValueError) as exc:
+        print(f"Dataset run setup failed: {exc}", file=sys.stderr)
+        return 2
+
     if args.dry_run:
-        plan = build_dataset_dry_run_plan(
-            settings=settings,
-            dataset=dataset,
-            dataset_path=args.dataset,
-        )
+        try:
+            plan = build_dataset_dry_run_plan(
+                settings=settings,
+                dataset=dataset,
+                dataset_path=args.dataset,
+            )
+        except ValueError as exc:
+            print(f"Dry-run validation failed: {exc}", file=sys.stderr)
+            return 2
         print(json.dumps(plan, indent=2, ensure_ascii=True))
         return 0
 
@@ -55,21 +68,25 @@ def main() -> int:
         len(dataset.documents),
         len(dataset.queries),
     )
-    opensearch_helper = OpenSearchHelper(settings)
-    opensearch_helper.ensure_test_index()
-    rag_client = RagServiceClient(settings)
-    artifact_writer = ArtifactWriter(settings)
-    executor = RetrievalFlowExecutor(
-        settings=settings,
-        rag_client=rag_client,
-        opensearch_helper=opensearch_helper,
-        artifact_writer=artifact_writer,
-    )
-
+    rag_client: RagServiceClient | None = None
     try:
+        opensearch_helper = OpenSearchHelper(settings)
+        opensearch_helper.ensure_test_index()
+        rag_client = RagServiceClient(settings)
+        artifact_writer = ArtifactWriter(settings)
+        executor = RetrievalFlowExecutor(
+            settings=settings,
+            rag_client=rag_client,
+            opensearch_helper=opensearch_helper,
+            artifact_writer=artifact_writer,
+        )
         summary = executor.run_dataset(dataset)
+    except Exception as exc:  # noqa: BLE001
+        print(f"Dataset run failed: {exc}", file=sys.stderr)
+        return 1
     finally:
-        rag_client.close()
+        if rag_client is not None:
+            rag_client.close()
 
     logger.info("Dataset run finished. Artifacts: %s", summary.run_dir)
 

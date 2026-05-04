@@ -1,43 +1,17 @@
 # PitchAvatar RAG Sentinel
 
-QA-owned dataset-driven harness for PitchAvatar RAG testing.
+RAG Sentinel is a QA-owned Python harness for testing the PitchAvatar RAG service as a black box.
+The current stable flow is:
 
-The current primary flow is:
+```text
+seed dataset -> search via gRPC -> evaluate retrieval -> cleanup seeded documents
+```
 
-`seed dataset -> search via gRPC -> evaluate retrieval -> cleanup seeded documents`
+It writes local JSON artifacts, static reports, trend reports, and a read-only Streamlit console.
+OpenSearch is used only for QA visibility checks, chunk inspection, cleanup verification, and
+explicit cleanup fallback.
 
-The framework talks to the RAG service as a black box over gRPC and uses OpenSearch only for:
-
-- index visibility checks
-- chunk verification
-- cleanup verification
-- emergency cleanup fallback
-- optional direct white-box verification when QA needs to inspect indexed documents outside gRPC
-
-OpenSearch target semantics:
-
-- `write alias` is used for direct cleanup fallback and synthetic bulk seeding helpers
-- `read alias` is used for verification queries and chunk inspection
-- `physical index` is used for refresh and optional auto-create flows
-- QA OpenSearch aliases and physical index names are server-side only and must not be sent in gRPC payloads
-- manual QA verification confirmed that direct OpenSearch queries can find seeded documents in the isolated QA environment when white-box checks are needed
-
-## Current concept
-
-Sentinel is no longer centered on isolated endpoint tests.
-The main unit of work is a retrieval dataset:
-
-- documents to upsert
-- queries to execute
-- expectations for retrieved chunks or document ids
-
-This lets QA build stable regression corpora first, and later extend the same flow with:
-
-- LLM answer evaluation
-- RAGAS or other eval layers
-- performance datasets
-
-## Quick start
+## Quick Install
 
 ```powershell
 cd C:\Projects\PitchAvatar-RAG-Sentinel
@@ -47,386 +21,110 @@ Copy-Item .env.example .env
 .venv\Scripts\python scripts\generate_proto.py
 ```
 
-Important on Windows:
+Use `.venv\Scripts\python -m pytest ...` on Windows unless the virtual environment is activated.
 
-- do not run bare `pytest` unless the virtual environment is activated
-- the safe form is `.venv\Scripts\python -m pytest ...`
-- otherwise PowerShell may pick the global `pytest.exe`
-
-Install optional UI dependencies when you want the local artifact console:
+Optional extras:
 
 ```powershell
 .venv\Scripts\python -m pip install -e ".[dev,report,ui]"
-```
-
-Install parser extras when you want the offline Dataset Builder to preview PDF or PPTX sources:
-
-```powershell
 .venv\Scripts\python -m pip install -e ".[dev,report,ui,parsers]"
 ```
 
-## Preflight
+## Dry Run
 
-Before the first real run:
-
-- replace template values like `your-username` and `your-password` in `.env`
-- set `RAG_SENTINEL_GRPC_TARGET` to the real QA/dev gRPC endpoint
-- point `RAG_SENTINEL_OPENSEARCH_URL` to the dedicated QA/OpenSearch environment
-- configure OpenSearch targets explicitly:
-  - `RAG_SENTINEL_OPENSEARCH_WRITE_ALIAS`
-  - `RAG_SENTINEL_OPENSEARCH_READ_ALIAS`
-  - `RAG_SENTINEL_OPENSEARCH_PHYSICAL_INDEX` when known
-- allow every configured OpenSearch target explicitly with `RAG_SENTINEL_OPENSEARCH_ALLOWED_TARGETS`; Sentinel refuses to run when any write/read/physical target is missing from that allowlist
-- if your QA role only has direct `_search` access in OpenSearch, keep `RAG_SENTINEL_DELETE_FALLBACK_TO_OPENSEARCH=false` and rely on gRPC delete plus OpenSearch search-based verification
-- keep `RAG_SENTINEL_FAIL_ON_CLEANUP_ERROR=true` unless you explicitly want retrieval evaluation to pass while reporting cleanup failures as warnings
-- if you run tiny corpora, confirm the RAG service itself is started with a BM25 threshold that will not filter out everything; QA verification confirmed `RAG_SERVICE_SEARCH_BM25_MIN_SCORE=0.1` works for white-box BM25 checks
-
-Recommended QA values:
-
-```env
-RAG_SENTINEL_GRPC_TARGET=qa-rag-service-dev.pitchavatar.com:443
-RAG_SENTINEL_GRPC_SECURE=true
-RAG_SENTINEL_GRPC_SERVER_NAME=qa-rag-service-dev.pitchavatar.com
-
-RAG_SENTINEL_OPENSEARCH_WRITE_ALIAS=dev-rag-index-qa
-RAG_SENTINEL_OPENSEARCH_READ_ALIAS=dev-rag-read-qa
-RAG_SENTINEL_OPENSEARCH_PHYSICAL_INDEX=dev-rag-index-qa-000001
-RAG_SENTINEL_OPENSEARCH_ALLOWED_TARGETS=dev-rag-index-qa,dev-rag-read-qa,dev-rag-index-qa-000001
-RAG_SENTINEL_DELETE_FALLBACK_TO_OPENSEARCH=false
-RAG_SENTINEL_FAIL_ON_CLEANUP_ERROR=true
-```
-
-## Layout
-
-```text
-datasets/
-  retrieval/                    # JSON datasets for retrieval regression
-proto/
-  rag.proto
-scripts/
-  generate_proto.py
-  run_dataset.py                # manual seed/search/evaluate/cleanup runner
-src/pitchavatar_rag_sentinel/
-  clients/                      # gRPC and OpenSearch clients
-  datasets/                     # dataset schema and loader
-  evaluators/                   # retrieval evaluation logic
-  executors/                    # orchestration flows
-  generated/                    # protobuf stubs
-  reporting/                    # artifact writer
-  utils/
-tests/
-  retrieval/                    # primary dataset-driven regression suite
-  smoke/
-  workflow/
-  search/
-```
-
-## Main retrieval flow
-
-The canonical MVP path is:
-
-1. load a retrieval dataset
-2. generate unique runtime document ids under the QA namespace
-3. upsert dataset documents through gRPC
-4. verify chunk indexing in OpenSearch
-5. execute search queries through gRPC
-6. evaluate returned document ids/chunks against dataset expectations
-7. store request/response/evaluation artifacts
-8. delete seeded documents through gRPC
-9. verify cleanup in OpenSearch, with fallback cleanup if enabled
-
-## Dataset shape
-
-Each retrieval dataset defines:
-
-- `dataset_id`
-- `description`
-- `documents`
-- `queries`
-
-Each query can declare:
-
-- `query`
-- `alpha`
-- `top_k`
-- `threshold`
-- `document_scope`
-- `filters`
-- `expectations`
-- optional `qrels`
-
-Expectations currently support:
-
-Document-level checks:
-
-- `expected_top1`
-- `expected_in_topk`
-- `forbidden_docs` (reported in artifacts as `forbidden_docs_absent`)
-- `min_results`
-- `expect_empty`
-
-Chunk-level checks:
-
-- `expected_top1_chunk_contains`: the top returned chunk must contain every listed fragment
-- `expected_in_topk_chunk_contains`: at least one returned chunk must contain every listed fragment
-- `forbidden_chunk_contains`: no returned chunk may contain any listed fragment
-
-Chunk checks are deterministic text checks, not LLM evaluation. Matching is case-insensitive
-and normalizes whitespace before comparing fragments.
-
-Optional qrels add relevance labels for classic document-level IR metrics. They answer a different
-question than expectations: expectation-based metrics ask "did this explicit test scenario pass?",
-while qrels-based IR metrics ask "how good was the ranking against relevance labels?"
-
-Example qrel:
-
-```json
-{
-  "document_key": "doc_upload_limits",
-  "relevance": 2
-}
-```
-
-Recommended relevance values are `0` for not relevant, `1` for partially relevant, and `2` for
-highly relevant. Only document-level qrels are scored today; chunk-level qrels are future work until
-stable chunk ids or chunk metadata are available from the RAG service. See
-[docs/ir_metrics.md](C:/Projects/PitchAvatar-RAG-Sentinel/docs/ir_metrics.md).
-
-Example chunk-level expectation:
-
-```json
-{
-  "query_id": "q_chunk_scope",
-  "query": "What does the runbook say about rollback?",
-  "alpha": 0.5,
-  "expectations": {
-    "expected_top1": "doc_runbook",
-    "expected_top1_chunk_contains": ["rollback window", "approval"],
-    "forbidden_chunk_contains": ["deprecated procedure"]
-  }
-}
-```
-
-Example dataset:
-
-- [quantum_baseline.json](C:/Projects/PitchAvatar-RAG-Sentinel/datasets/retrieval/quantum_baseline.json)
-
-Dataset strategy and categories:
-
-- [docs/datasets.md](C:/Projects/PitchAvatar-RAG-Sentinel/docs/datasets.md)
-- [docs/dataset_builder.md](C:/Projects/PitchAvatar-RAG-Sentinel/docs/dataset_builder.md)
-- [docs/reporting.md](C:/Projects/PitchAvatar-RAG-Sentinel/docs/reporting.md)
-- [docs/smoke_calibration_report.md](C:/Projects/PitchAvatar-RAG-Sentinel/docs/smoke_calibration_report.md)
-
-## Commands
-
-Run the offline suite used by CI. This does not require real gRPC or OpenSearch:
+Validate a dataset and planned environment without gRPC or OpenSearch calls:
 
 ```powershell
-.venv\Scripts\python -m pytest -m "not integration and not destructive" -vv
+.venv\Scripts\python scripts\run_dataset.py datasets\retrieval\smoke\retrieval_smoke_v1.json --dry-run
 ```
 
-Equivalent local profile:
+## Stable Smoke Run
+
+Run the stable smoke dataset against configured QA/dev services:
 
 ```powershell
-.\scripts\test.ps1 -Profile offline
+.venv\Scripts\python scripts\run_dataset.py datasets\retrieval\smoke\retrieval_smoke_v1.json --summary
 ```
 
-Run the full dataset suite against configured services. These tests mutate the QA environment and are marked `integration`, `grpc`, `opensearch`, and `destructive`:
+This performs real seed, search, evaluation, and cleanup. It requires safe `.env` settings and
+explicitly allowlisted QA OpenSearch targets.
 
-```powershell
-.venv\Scripts\python -m pytest tests\retrieval -vv
-```
+## Reports
 
-Run all retrieval-marked tests:
-
-```powershell
-.venv\Scripts\python -m pytest -m retrieval -vv
-```
-
-Run one dataset manually and print summary:
-
-```powershell
-.venv\Scripts\python scripts\run_dataset.py datasets\retrieval\quantum_baseline.json --summary
-```
-
-Validate a dataset run plan without gRPC/OpenSearch calls:
-
-```powershell
-.venv\Scripts\python scripts\run_dataset.py datasets\retrieval\quantum_baseline.json --dry-run
-```
-
-Preview local `.txt`, `.md`, `.pdf`, or `.pptx` source sections for a draft dataset:
-
-```powershell
-.venv\Scripts\python scripts\preview_dataset_source.py path\to\source.md
-.venv\Scripts\python scripts\preview_dataset_source.py path\to\file.pdf
-.venv\Scripts\python scripts\preview_dataset_source.py path\to\deck.pptx
-```
-
-The Dataset Builder is an offline drafting helper, not an automatic dataset generator. A parsed
-file only becomes a useful retrieval dataset after QA manually defines queries, expected documents
-or sections, and expected chunk fragments. Current source parsing supports `.txt`, `.md`, `.pdf`,
-and `.pptx`. PDF support is text-layer only; scanned PDFs are not supported yet. PPTX support
-extracts slide text and table-cell text, not visual layout, images, charts, animations, or speaker
-notes.
-
-In the real PitchAvatar pipeline, PHP extracts text from uploaded files before the Go/RAG chunking
-pipeline receives it, so page and slide metadata may not be preserved in RAG chunks. For
-production-like PDF/PPTX tests, use `file_as_document` and prefer chunk-level expectations such as
-`expected_top1_chunk_contains` or `expected_in_topk_chunk_contains`. Use `section_as_document` for
-controlled QA/debug retrieval experiments. Always dry-run generated JSON before any real retrieval
-run:
-
-```powershell
-.venv\Scripts\python scripts\run_dataset.py path\to\generated_dataset.json --dry-run
-```
-
-Generate a read-only HTML report from existing artifacts:
+Generate a per-run static report:
 
 ```powershell
 .venv\Scripts\python scripts\generate_report.py --run-dir artifacts\runs\<run-id>\<dataset-id>
-Invoke-Item artifacts\runs\<run-id>\<dataset-id>\report.html
 ```
 
-Generate a report for the newest artifact directory under `artifacts/runs`:
-
-```powershell
-.venv\Scripts\python scripts\generate_report.py --latest
-```
-
-Generate a read-only trends report across local artifact summaries:
+Generate a trends report across local artifact summaries:
 
 ```powershell
 .venv\Scripts\python scripts\generate_trends_report.py --artifacts-root artifacts\runs
 ```
 
-Launch the read-only Streamlit console for local artifacts:
-
-```powershell
-streamlit run apps/sentinel_console.py
-```
-
-or without activating the virtual environment:
+Launch the read-only Streamlit console:
 
 ```powershell
 .venv\Scripts\streamlit.exe run apps\sentinel_console.py
 ```
 
-Run the gRPC-only smoke suite:
+The console reads local artifacts and includes a Dataset Builder tab. It does not start real RAG
+runs, call cleanup APIs, or mutate services.
+
+## Dataset Builder
+
+The Dataset Builder is an offline drafting helper for `.txt`, `.md`, `.pdf`, and `.pptx` sources.
+It previews parsed sections and can generate retrieval dataset JSON after QA manually defines
+queries, expected documents or sections, and expected chunk fragments.
+
+Preview a source file:
 
 ```powershell
-.venv\Scripts\python -m pytest tests\smoke\test_smoke.py -vv
+.venv\Scripts\python scripts\preview_dataset_source.py path\to\source.md
 ```
 
-Run the currently accessible QA checks only:
+Always dry-run generated JSON before any real retrieval run.
+
+## Common Checks
 
 ```powershell
-.\scripts\test.ps1 -Profile grpc
-.\scripts\test.ps1 -Profile available
+.venv\Scripts\ruff.exe check .
+.venv\Scripts\python -m pytest -m "not integration and not destructive" -vv
+.\scripts\test.ps1 -Profile offline
 ```
 
-## Artifacts
+Offline tests must not call gRPC or OpenSearch. Real service tests are marked `integration` and
+destructive service-mutating tests are marked `destructive`.
 
-Run artifacts are written under:
+## Detailed Docs
 
-- `artifacts/runs/<run-id>/<dataset-id>/seed_manifest.json`
-- `artifacts/runs/<run-id>/<dataset-id>/queries/<query-id>.json`
-- `artifacts/runs/<run-id>/<dataset-id>/summary.json`
+- [Datasets](docs/datasets.md)
+- [Dataset Builder](docs/dataset_builder.md)
+- [Artifact Contract](docs/artifact_contract.md)
+- [Reporting](docs/reporting.md)
+- [IR Metrics](docs/ir_metrics.md)
+- [Test Organization](tests/README.md)
+- [Future Answer Evaluation Plan](docs/answer_evaluation_plan.md)
+- [Smoke Calibration Report](docs/smoke_calibration_report.md)
 
-Artifacts contain:
+## Current Scope
 
-- effective request payload
-- gRPC response payload
-- evaluation results
-- seeded runtime document ids
-- cleanup status
-- cleanup warnings and structured cleanup errors when cleanup fails
-- deterministic aggregate metrics in `summary.json`
-- qrels-based IR metrics in `summary.json` when queries define `qrels`
-
-By default `RAG_SENTINEL_FAIL_ON_CLEANUP_ERROR=true`, so a final cleanup failure makes the
-overall run fail after `summary.json` is written. Set it to `false` only when you want retrieval
-results to pass while cleanup failures are preserved as warnings in the summary artifact.
-
-## Artifact reports
-
-`scripts/generate_report.py` builds a static `report.html` inside an existing dataset artifact
-directory. It is read-only: it loads `summary.json` and `queries/*.json`, then renders run status,
-metrics, timing metrics, failed query details, all query results, and cleanup warnings/errors.
-
-`apps/sentinel_console.py` provides a read-only Streamlit console over the same local artifacts.
-It lets QA select an artifact root, run, and dataset, then browse summary fields, metrics, timing
-metrics, failed queries, all queries, query detail JSON, and cleanup details.
-
-The console also includes a `Trends` tab. It scans local artifact summaries, supports dataset
-filtering, shows latest status per dataset, lists runs latest-first, and displays simple metric
-trend charts for pass rates, document/chunk metrics, timings, and failed query counts.
-
-The report viewer does not start real RAG runs, does not call gRPC or OpenSearch, and does not
-perform cleanup or any destructive action. It is intended for sharing and inspecting already
-captured QA artifacts.
-
-Future reporting work can build on the same loader for richer trend analysis and dataset builder
-workflows. Real run launchers should stay behind explicit safety controls.
-
-## Current metrics
-
-`summary.json` includes a `metrics` object with deterministic QA regression metrics calculated
-from explicit retrieval expectations and their check results. These metrics cover query pass rate,
-document top-1 accuracy, document hit rate at k, forbidden document violations, empty-query checks,
-chunk top-1 match rate, chunk hit rate at k, forbidden chunk violations, and basic run/search
-timings when a real run executes.
-
-These are not `pytrec_eval` metrics yet, not Ragas metrics yet, and not LLM-as-judge scores. They
-are intended for regression reporting now and future dashboard visualization later. Rates are
-reported as floats from `0.0` to `1.0`; when no explicit checks apply, the corresponding rate is
-`null`.
-
-When datasets include qrels, `summary.json` also includes a separate `ir_metrics` object with
-document-level ranking metrics such as `hit_rate_at_1`, `hit_rate_at_5`, `recall_at_5`,
-`precision_at_5`, `mrr`, `ndcg_at_5`, and `ndcg_at_10`. These are kept separate from `metrics` and
-do not affect expectation pass/fail status. The current implementation is dependency-free;
-`pytrec_eval` can be considered later once the qrels format is stable.
-
-Status fields differ intentionally:
-
-- `all_queries_passed`: retrieval expectations only.
-- `run_passed`: final run status, including cleanup policy.
-- `metrics.query_pass_rate`: aggregate ratio of passed query evaluations to total query evaluations.
-
-## Current scope
-
-Primary:
+Implemented today:
 
 - dataset-driven retrieval regression
 - gRPC seed/search/delete lifecycle
-- OpenSearch verify and cleanup
-- artifact capture for QA analysis
+- OpenSearch verification and cleanup safety
+- document-level and chunk-level expectation checks
+- optional qrels-based IR metrics
+- local artifacts, reports, trends, and read-only console
+- offline Dataset Builder for `.txt`, `.md`, `.pdf`, and `.pptx`
 
-Secondary legacy suites:
+Not implemented in this phase:
 
-- smoke
-- workflow
-- endpoint-focused search checks
-
-Recommended while QA access is limited to gRPC plus direct OpenSearch `_search`:
-
-- `grpc` profile: local contract tests plus gRPC-only smoke
-- `available` profile: `grpc` plus white-box OpenSearch search checks in `smoke`, `search`, and `workflow`
-- full dataset retrieval runs stay available, but they are no longer the default recommendation for partial-access QA roles
-- CI and local offline checks should use `pytest -m "not integration and not destructive"` so real service tests do not run accidentally.
-- retrieval smoke datasets are stable health checks; diagnostic and precision datasets are for investigation or stricter retrieval behavior checks.
-- `alpha=1.0` is not used as the stable smoke default until backend `SearchWithThreshold` semantics are confirmed.
-
-## Notes
-
-- `DeleteIndex` and `IndexExists` still use `index_name` as `document_id` in the current service contract.
-- `SearchWithThreshold.index_name` is deprecated/unused and Sentinel scopes retrieval through `document_ids`.
-- `UploadDocumentRequest.index_name` must never carry `dev-rag-index-qa`, `dev-rag-read-qa`, or the physical QA index.
-- Direct OpenSearch verification is valid for QA diagnostics and retrieval checks, but those aliases/index names remain OpenSearch-side only and must not leak into gRPC payloads.
-- The framework protects against accidental use of production-like indices by default.
-- OpenSearch write/read/physical targets must be exact-name allowlisted before Sentinel will run.
-- Sentinel supports separate OpenSearch `write/read` aliases for the QA setup.
-- `Playwright` is not needed for this stage.
-- `RAGAS` is not the core of the framework, but the structure now leaves room to add answer-level evaluation later.
+- answer evaluation
+- Ragas
+- `pytrec_eval`
+- database-backed artifact storage
+- real run execution from UI
+- gRPC proto changes

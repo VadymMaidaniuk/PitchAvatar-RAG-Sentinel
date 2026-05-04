@@ -88,6 +88,7 @@ def test_dry_run_validates_dataset_without_grpc_or_opensearch_calls(
 def test_dry_run_fails_on_duplicate_query_id(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     dataset_path = tmp_path / "duplicate-query-id.json"
     write_dataset(
@@ -113,13 +114,18 @@ def test_dry_run_fails_on_duplicate_query_id(
         ["run_dataset.py", str(dataset_path), "--dry-run"],
     )
 
-    with pytest.raises(ValueError, match="query_id values must be unique"):
-        run_dataset.main()
+    assert run_dataset.main() == 2
+
+    captured = capsys.readouterr()
+    assert "Dataset run setup failed:" in captured.err
+    assert "query_id values must be unique" in captured.err
+    assert "Traceback" not in captured.err
 
 
 def test_dry_run_fails_on_unsafe_opensearch_target(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     dataset_path = tmp_path / "dataset.json"
     write_dataset(dataset_path)
@@ -133,8 +139,12 @@ def test_dry_run_fails_on_unsafe_opensearch_target(
         ["run_dataset.py", str(dataset_path), "--dry-run"],
     )
 
-    with pytest.raises(ValueError, match="non-allowlisted OpenSearch target"):
-        run_dataset.main()
+    assert run_dataset.main() == 2
+
+    captured = capsys.readouterr()
+    assert "Dataset run setup failed:" in captured.err
+    assert "non-allowlisted OpenSearch target" in captured.err
+    assert "Traceback" not in captured.err
 
 
 def test_dry_run_output_contains_dataset_and_case_counts(
